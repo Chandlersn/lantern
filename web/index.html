@@ -18,6 +18,7 @@
     </div>
     <nav id="nav">
       <a data-view="overview" class="active">总览<span class="badge ghost" id="navTotal">0</span></a>
+      <a data-view="sparks">灵感碎片</a>
       <a data-view="knowledge">知识库<span class="badge ghost" id="navItems">0</span></a>
       <a data-view="reader">阅读</a>
       <a data-view="visualize">逻辑偏差</a>
@@ -92,6 +93,34 @@
             <tbody id="kbBody"></tbody>
           </table>
           <div id="kbPager" class="pager"></div>
+        </div>
+      </section>
+
+      <!-- ========== 灵感碎片（原料层 · 知识出发点） ========== -->
+      <section id="view-sparks" class="view">
+        <div class="card">
+          <h2>随手记</h2>
+          <p class="desc">把脑子里一闪而过的想法记下来。这里刻意不分类、不定位——它是知识的出发点，投影留给「孵化」。</p>
+          <label>想法（必填）</label>
+          <textarea id="spContent" placeholder="例如：双尺度坐标系也许能和闪念笔记结合，先记下来再说……"></textarea>
+          <div class="row" style="margin-top:8px;gap:8px;">
+            <input id="spTitle" type="text" placeholder="标题（可选，不填取首句）" style="flex:1;min-width:160px;" />
+            <input id="spTags" type="text" placeholder="标签（逗号分隔，可选）" style="flex:1;min-width:160px;" />
+          </div>
+          <div class="row end" style="margin-top:8px;">
+            <button id="spSave">记下来</button>
+          </div>
+          <div id="spOut" style="margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <h2>灵感碎片 <span class="muted" id="spCount"></span></h2>
+          <p class="desc">所有随手记都在这里。状态：原料（待孵化）/ 孵化中 / 已孵化（已长成知识条目）。点「孵化」把它投影成正式知识。</p>
+          <div id="spList"></div>
+        </div>
+        <div class="card">
+          <h2>聚类萌发</h2>
+          <p class="desc">引擎按关键词共现把相近碎片聚成主题簇——只呈现「这些似乎在讲同一件事」，不下结论；整簇可一键孵化。</p>
+          <div id="spClusters"></div>
         </div>
       </section>
 
@@ -427,8 +456,9 @@
 <script src="js/render.js"></script>
 <script src="js/actions.js"></script>
 <script src="js/ui.js"></script>
-<script src="js/feedback.js"></script>
-<script src="js/init.js"></script>
+    <script src="js/feedback.js"></script>
+    <script src="js/sparks.js"></script>
+    <script src="js/init.js"></script>
 
 </body>
 </html>

@@ -1168,6 +1168,57 @@ TOOLS = [
             "required": ["query"]
         },
     },
+    {
+        "name": "kb_sparks",
+        "description": "列出灵感碎片（最上游原料层，无坐标随手记）。可传 status 过滤（raw/incubating/hatched），用于查看待孵化原料或已孵化溯源。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "description": "可选：raw（原料）/incubating（孵化中）/hatched（已孵化）"},
+                "limit": {"type": "integer", "description": "返回条数，默认 500"}
+            }
+        }
+    },
+    {
+        "name": "kb_add_spark",
+        "description": "捕获一条灵感碎片（真正的知识出发点）。content 为随手记想法，title/tags 可选；刻意不做双尺度投影，投影在孵化时由 kb_hatch_spark 完成。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "灵感内容（必填）"},
+                "title": {"type": "string", "description": "可选标题，不填取首 24 字"},
+                "tags": {"type": "array", "description": "可选自由标签"},
+                "source": {"type": "string", "description": "来源：manual/import/clip，默认 manual"}
+            },
+            "required": ["content"]
+        }
+    },
+    {
+        "name": "kb_hatch_spark",
+        "description": "孵化灵感碎片：把一条碎片投影成正式知识条目（走双尺定位+阴阳闭环），并回填溯源。返回新条目坐标。axis_domain 可选更细学科方向。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "spark_id": {"type": "integer", "description": "碎片 id（必填）"},
+                "title": {"type": "string", "description": "可选覆写标题"},
+                "axis_domain": {"type": "string", "description": "可选受控学科域"},
+                "run_closure": {"type": "boolean", "description": "是否自动跑阴阳闭环，默认 true"}
+            },
+            "required": ["spark_id"]
+        }
+    },
+    {
+        "name": "kb_spark_clusters",
+        "description": "灵感碎片的离线聚类萌发：关键词共现把相近碎片聚成主题簇，只呈现「这些碎片似乎在讲同一件事」的结构，不下结论；供决定哪些该孵化。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "top_k": {"type": "integer", "description": "返回簇数，默认 8"},
+                "min_shared": {"type": "integer", "description": "成簇最少共享词数，默认 2"},
+                "min_jac": {"type": "number", "description": "成簇最小 Jaccard 重叠比，默认 0（不卡 Jaccard，仅以共享词数为门槛；>0 时作额外收紧）"}
+            }
+        }
+    },
 ]
 
 
@@ -1199,6 +1250,21 @@ def revise_with_feedback(fid):
     return store.revise_with_feedback(fid)
 
 
+# ---------------------------------------------------------------- 灵感碎片（原料层）API
+# 最上游的随手记捕获，刻意无坐标；投影发生在孵化（kb.add_knowledge）。
+def sparks(status=None, limit=500):
+    return store.list_sparks(status, limit)
+
+def add_spark(content, title=None, tags=None, source="manual"):
+    return store.add_spark(content, title, tags, source)
+
+def spark_clusters(top_k=8, min_shared=2, min_jac=0.0):
+    return store.spark_clusters(top_k, min_shared, min_jac)
+
+def hatch_spark(spark_id, title=None, axis_domain=None, run_closure=True):
+    return store.hatch_spark(int(spark_id), title, axis_domain, run_closure)
+
+
 def dispatch(name, args):
     """统一入口：REST 与 MCP 都通过它调用，确保行为一致。"""
     args = args or {}
@@ -1228,6 +1294,18 @@ def dispatch(name, args):
         return fragments(args.get("query", args.get("text", "")),
                         args.get("filters") or {},
                         int(args.get("top_k", 8)))
+    if name == "kb_sparks":
+        return sparks(args.get("status"), int(args.get("limit", 500)))
+    if name == "kb_add_spark":
+        return add_spark(args.get("content"), args.get("title"),
+                        args.get("tags"), args.get("source", "manual"))
+    if name == "kb_hatch_spark":
+        return hatch_spark(args.get("spark_id"), args.get("title"),
+                          args.get("axis_domain"), bool(args.get("run_closure", True)))
+    if name == "kb_spark_clusters":
+        return {"clusters": spark_clusters(int(args.get("top_k", 8)),
+                                          int(args.get("min_shared", 2)),
+                                          float(args.get("min_jac", 0.0)))}
     if name == "kb_health":
         return health()
     if name == "kb_edges":

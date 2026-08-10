@@ -140,6 +140,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json({"unread": store.count_unread_feedback(),
                                    "items": store.list_feedback(status),
                                    "signal": store.signal_integrity()})
+            # -------------------------------------------- 灵感碎片（原料层）接口
+            if p.path == "/api/sparks":
+                status = (parse_qs(p.query).get("status") or [None])[0]
+                items = store.list_sparks(status)
+                return self._json({"items": items, "count": len(items)})
+            if p.path == "/api/sparks/clusters":
+                return self._json({"clusters": store.spark_clusters()})
             # -------------------------------------------- 知识库 REST 接口
             if p.path == "/api/kb/state":
                 return self._json(kb.state())
@@ -319,6 +326,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                             bool(body.get("backup", False))))
             if p.path == "/api/kb/backup":
                 return self._json(kb.backup(body.get("reason") or "manual"))
+            # -------------------------------------------- 灵感碎片（原料层）接口
+            if p.path == "/api/sparks":
+                content = (body.get("content") or "").strip()
+                if not content:
+                    return self._json({"error": "content 不能为空"}, 400)
+                return self._json(store.add_spark(
+                    content, body.get("title"), body.get("tags"), body.get("source", "manual")))
+            if p.path.startswith("/api/sparks/"):
+                rest = p.path[len("/api/sparks/"):].strip("/")
+                parts = [x for x in rest.split("/") if x]
+                if not parts or not parts[0].isdigit():
+                    return self._json({"error": "bad path"}, 400)
+                sid = int(parts[0])
+                if len(parts) >= 2 and parts[1] == "hatch":
+                    return self._json(kb.hatch_spark(
+                        sid, body.get("title"), body.get("axis_domain"),
+                        bool(body.get("run_closure", True))))
+                if len(parts) >= 2 and parts[1] == "delete":
+                    return self._json({"ok": store.delete_spark(sid)})
+                # 默认：改状态 / 标签
+                return self._json({"ok": store.update_spark_status(
+                    sid, body.get("status", "raw"), body.get("tags"))})
             # -------------------------------------------- 反馈收件箱接口（POST 状态变更）
             if p.path == "/api/feedback/read":
                 return self._json({"ok": store.mark_feedback_read(int(body.get("id")))})

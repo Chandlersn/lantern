@@ -577,6 +577,15 @@
   .fb-dot.sev-warn{background:#C98A2B;}
   .fb-dot.sev-info{background:#3A5A8C;}
 
+  /* 灵感碎片（原料层） */
+  #view-sparks .sp-card, #view-sparks .sp-cluster{margin-bottom:12px;}
+  .sp-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
+  .sp-head b{font-size:13.5px;color:var(--ink);}
+  .sp-body{font-size:13px;color:var(--ink);line-height:1.6;margin:6px 0;white-space:pre-wrap;word-break:break-word;}
+  .sp-tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;}
+  .sp-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+  #spContent{min-height:84px;}
+
   /* ============== 无障碍：尊重「减少动态效果」系统设置 ============== */
   @media (prefers-reduced-motion: reduce){
     *,*::before,*::after{

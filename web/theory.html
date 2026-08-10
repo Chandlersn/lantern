@@ -322,8 +322,60 @@
     <li>这是灯笼比"被动镜像式 wiki"多出来的一层：<b>作者意图 ↔ 引擎洞察的对话</b>，而非把关键词直接塞进图谱造成混乱。</li>
   </ul>
 
+  <h2>十四、知识生命周期的原点：灵感碎片（原料层）</h2>
+  <p>前十三节把系统讲成了"卡尺 + 闭环 + 双引擎"。但还有一个最前置、也最容易被忽略的问题：<b>库里的知识，到底从哪来？</b></p>
+  <p>直觉会答"从收藏的文章、从写过的历史文章来"。这不对。收藏与历史文章是<b>既有来源</b>，是别人或过去的产出，它们不是原点。真正的原点是<b>灵感碎片</b>——你随手记下的、还没成形的念头。它比收藏的文章、比已写过的文章都更重要：新内容是从这里长出来的，它是后续诞生一切的真正核心原料，是<b>出发点</b>。</p>
+
+  <div class="fig">
+    <svg viewBox="0 0 680 250" width="100%" xmlns="http://www.w3.org/2000/svg" role="img">
+      <title>知识生命周期：灵感碎片是原点（刻意无坐标）</title>
+      <g font-size="13" text-anchor="middle">
+        <rect x="30" y="80" width="120" height="56" rx="8" fill="#FCFAF3" stroke="#B5302A" stroke-width="1.6"/>
+        <text x="90" y="104" font-weight="600" fill="#B5302A">灵感碎片</text>
+        <text x="90" y="123" font-size="11" fill="#6B6359">raw · 刻意无坐标</text>
+
+        <rect x="180" y="80" width="120" height="56" rx="8" fill="#FCFAF3" stroke="#23201C" stroke-width="1.4"/>
+        <text x="240" y="104" font-weight="600" fill="#23201C">聚类萌发</text>
+        <text x="240" y="123" font-size="11" fill="#6B6359">摊开结构·不下结论</text>
+
+        <rect x="330" y="80" width="120" height="56" rx="8" fill="#FCFAF3" stroke="#23201C" stroke-width="1.4"/>
+        <text x="390" y="104" font-weight="600" fill="#23201C">孵化</text>
+        <text x="390" y="123" font-size="11" fill="#6B6359">双尺投影 + 闭环</text>
+
+        <rect x="480" y="80" width="150" height="56" rx="8" fill="#EFE9DC" stroke="#23201C" stroke-width="1.6"/>
+        <text x="555" y="104" font-weight="600" fill="#23201C">知识条目</text>
+        <text x="555" y="123" font-size="11" fill="#6B6359">领域带 × 游标（含坐标）</text>
+      </g>
+      <g stroke="#23201C" stroke-width="1.6" fill="none" marker-end="url(#ar2)">
+        <line x1="150" y1="108" x2="178" y2="108"/>
+        <line x1="300" y1="108" x2="328" y2="108"/>
+        <line x1="450" y1="108" x2="478" y2="108"/>
+      </g>
+      <g>
+        <rect x="480" y="160" width="150" height="42" rx="8" fill="#FBF8F0" stroke="#6B6359" stroke-width="1.2" stroke-dasharray="5 4"/>
+        <text x="555" y="185" font-size="11" fill="#6B6359" text-anchor="middle">收藏 / 历史文章（既有来源·非原点）</text>
+        <line x1="555" y1="160" x2="555" y2="138" stroke="#6B6359" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#ar2)"/>
+      </g>
+      <path d="M560 80 Q345 18 110 80" fill="none" stroke="#B5302A" stroke-width="1.6" marker-end="url(#ar3)"/>
+      <text x="345" y="34" font-size="12" fill="#B5302A" text-anchor="middle">闭环 / 反馈 → 催生新碎片</text>
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+        <marker id="ar3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#B5302A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+      </defs>
+    </svg>
+    <div class="cap">图 4 · 知识生命周期：灵感碎片是原点（刻意无坐标），聚类萌发只摊开结构，孵化才投影成坐标；收藏 / 历史文章只是既有来源，非原点</div>
+  </div>
+
+  <p>这一层刻意【无坐标】：捕获时<b>不</b>做任何双尺度投影，领域归属与演绎深度都推迟到"孵化"环节，由 <code>kb.add_knowledge</code> 完成。这保证"先有原料，后有坐标"——碎片的本质是出发点，强行在捕获时投影会污染原点的纯粹性。</p>
+  <ul>
+    <li><b>捕获（spark-add）</b>：随手记一条想法，存进 <code>sparks</code> 表，<code>status</code> 恒为 <code>raw</code>。捕获界面不出现领域带 / 游标读数。</li>
+    <li><b>聚类萌发（spark-clusters）</b>：离线关键词共现 + 并查集聚类，<b>只呈现"这些碎片似乎在讲同一件事"</b>的主题簇（<code>shared_terms</code> + <code>members</code>）。它是"摊开结构、不下结论"的软洞察——绝不替你判定该合并，孵不孵化由人定。</li>
+    <li><b>孵化（spark-hatch）</b>：把碎片交给 <code>kb.add_knowledge</code> 走正常双尺投影 + 阴阳闭环，落为正式 <code>items</code> 条目；并回填 <code>hatched_item_id</code> + <code>status=hatched</code>，打通"原料 → 成品"的溯源链。</li>
+  </ul>
+  <p>出口有两种：碎片已较完整则<b>直接孵化</b>（轻量投影）；碎片只是粗糙出发点则先转<b>步骤 A–E 深度策展</b>（多轴拆解）再孵化。无论哪条路，<b>闭环都从原点启动</b>。前端「灵感碎片」视图（捕获盒 / 列表 / 聚类 / 孵化）与 <code>/api/sparks/*</code> 接口、以及 lantern-method 的<b>步骤 0</b>，都走同一套 <code>kb.*</code> 引擎，行为一致。</p>
+
   <footer>
-    灯笼 · 多维轴认知框架 · 工作台模块 / 智能知识库系统　|　理论修订稿 v5 · schema 1.0.0 · 已留 agent 双通道接口（REST + MCP）　|　含反馈收件箱 / 概念衍生层 / 信号完整性守卫　|　宣纸墨韵主题
+    灯笼 · 多维轴认知框架 · 工作台模块 / 智能知识库系统　|　理论修订稿 v6 · schema 1.0.0 · 已留 agent 双通道接口（REST + MCP）　|　含灵感碎片原料层 / 反馈收件箱 / 概念衍生层 / 信号完整性守卫　|　宣纸墨韵主题
   </footer>
 
 </div>

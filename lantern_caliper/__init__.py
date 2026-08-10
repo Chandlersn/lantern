@@ -16,9 +16,9 @@ import types
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 导入全部子模块（顺序无关，子模块不互相 import）
-from . import (core, schema, measure, items, articles, feedback, guard, links, concepts, search, graph, summarize, audit)
+from . import (core, schema, measure, items, articles, feedback, guard, links, concepts, search, graph, summarize, audit, sparks)
 
-_MODS = [core, schema, measure, items, articles, feedback, guard, links, concepts, search, graph, summarize, audit]
+_MODS = [core, schema, measure, items, articles, feedback, guard, links, concepts, search, graph, summarize, audit, sparks]
 _G = globals()
 for _m in _MODS:
     for _n, _v in vars(_m).items():

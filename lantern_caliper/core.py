@@ -556,6 +556,22 @@ def migrate():
       created_at REAL NOT NULL,
       UNIQUE(concept_id, item_id)
     )""")
+    # 灵感碎片（原料层）：最上游的随手记捕获，刻意【无坐标】——投影（领域/演绎深度）
+    # 发生在孵化环节，不在此落双尺度。status: raw→incubating→hatched；hatched_item_id
+    # 打通原料→成品溯源；embedding 仅 LLM 可用时存，否则 NULL（不依赖它也能跑）。
+    con.execute("""
+    CREATE TABLE IF NOT EXISTS sparks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT,
+      content TEXT NOT NULL,
+      tags TEXT,                       -- JSON 数组（自由标签）
+      source TEXT NOT NULL DEFAULT 'manual',  -- manual | import | clip
+      status TEXT NOT NULL DEFAULT 'raw',     -- raw | incubating | hatched
+      created_at REAL NOT NULL,
+      updated_at REAL NOT NULL,
+      hatched_item_id INTEGER,        -- 孵化后关联的知识条目 id
+      embedding TEXT
+    )""")
     cols = {r[1] for r in con.execute("PRAGMA table_info(items)")}
     for col, ddl in [
         ("axis_domain", "ALTER TABLE items ADD COLUMN axis_domain TEXT"),

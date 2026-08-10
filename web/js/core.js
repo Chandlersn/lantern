@@ -12,7 +12,7 @@ const api = async (path, body) => {
 const cur = () => (S.items.find(i => i.id === curId) || S.items[0]);
 
 /* ---------------- 视图切换 ---------------- */
-const VIEWS = {overview:['总览','Overview'], knowledge:['知识库','Knowledge'],
+const VIEWS = {overview:['总览','Overview'], sparks:['灵感碎片','Sparks'], knowledge:['知识库','Knowledge'],
   reader:['阅读','Read'], visualize:['逻辑偏差','Logic'],
   graph:['知识图谱','Graph'],
   model:['设置','Settings']};
@@ -29,6 +29,7 @@ function selectView(name){
   if(name==='graph') renderGraph();
   if(name==='model') renderModel();
   if(name==='overview') renderOverview();
+  if(name==='sparks') renderSparks();
 }
 $('nav').querySelectorAll('a').forEach(a=>a.onclick=()=>selectView(a.dataset.view));
 
