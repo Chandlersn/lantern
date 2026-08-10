@@ -178,3 +178,12 @@ def dismiss_feedback(fid):
     con.commit(); con.close()
     return ok
 
+
+def delete_feedback(fid):
+    """彻底删除一条反馈（物理删除，区别于 dismiss 软忽略）。"""
+    con = connect()
+    cur = con.execute("DELETE FROM feedback_inbox WHERE id=?", (fid,))
+    ok = cur.rowcount > 0
+    con.commit(); con.close()
+    return ok
+

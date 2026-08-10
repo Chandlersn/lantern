@@ -283,6 +283,7 @@ function fbCard(it){
     + (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "")
     + (it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "")
     + (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "")
+    + `<button class="soft danger" data-act="delete">删除</button>`
     + `</div></div>`;
 }
 
@@ -298,6 +299,13 @@ function bindFbCards(items){
         const act = btn.dataset.act;
         if(act==="open"){ openFbItem(it); return; }
         if(act==="applied"){ applyFbRevision(it); return; }   // 应用更新 → 生成修订稿 + diff 预览，确认才回写
+        if(act==="delete"){
+          if(!confirm("确定彻底删除这条反馈？此操作不可恢复。")) return;
+          const r = await api("/api/feedback/delete", { id });
+          if(r && r.ok){ card.remove(); refreshFeedback(false); }
+          else alert("删除失败");
+          return;
+        }
         const map = { read:"/api/feedback/read", dismiss:"/api/feedback/dismiss" };
         await api(map[act], { id });
         refreshFeedback(false);

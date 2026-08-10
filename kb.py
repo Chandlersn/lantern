@@ -51,6 +51,11 @@ def axis_domains():
 # 注：「时间」在 axes 表里实为维度而非学科域，domain_registry 不含它，故不在此。
 DOMAIN_TO_BAND = {d: reg["band"] for d, reg in store._DOMAIN_REGISTRY.items()}
 
+# 受控学科域词表（静态、永远来自 schema domain_registry）。作为 axis_domain 归一化
+# 的真相源——axes 表的 domains 是 Skill 提议的透镜词表（动态、可能为空），不应作为
+# 学科域判定的依据，否则空库 / seed 演示库会把所有合法学科域都归一化为 None。
+CONTROLLED_DOMAINS = set(store._DOMAIN_REGISTRY.keys())
+
 
 def domain_band(domain):
     """受控学科域 → 主干领域带；非受控域返回 None。"""
@@ -68,11 +73,16 @@ def domain_intra_order(domain):
 
 
 def normalize_axis_domain(value):
-    """把自由文本学科标签收敛到受控词表；不在词表内则返回 None（不污染存储）。"""
+    """把自由文本学科标签收敛到受控学科域词表（schema domain_registry，静态 13 域）；
+    不在词表内则返回 None（不污染存储）。
+
+    注意：受控集取自静态 domain_registry，而非 axis_domains()（后者来自 axes 表，
+    是 Skill 提议的透镜词表，动态且可能为空）。以 axes 表为真相源会导致空库 / seed
+    演示库的 axis_domain 全部归一化为 None。"""
     if not value:
         return None
     v = str(value).strip()
-    return v if v in axis_domains() else None
+    return v if v in CONTROLLED_DOMAINS else None
 
 
 def add_knowledge(title, content, run_closure=True, axis_domain=None):

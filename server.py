@@ -326,6 +326,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json({"ok": store.mark_feedback_applied(int(body.get("id")))})
             if p.path == "/api/feedback/dismiss":
                 return self._json({"ok": store.dismiss_feedback(int(body.get("id")))})
+            if p.path == "/api/feedback/delete":
+                return self._json({"ok": store.delete_feedback(int(body.get("id")))})
             if p.path == "/api/feedback/apply":
                 # 应用更新闭环第 1 步：仅生成修订稿，不落库；前端 diff 预览 + 用户确认后才回写
                 try:

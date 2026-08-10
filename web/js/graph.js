@@ -281,7 +281,7 @@ async function graphSelectNode(id){
       else { tag='关键词共现'; cls='col'; }
       // 方向词（出链/入链）只对硬链有意义；软链是对称关联，硬加方向会误导「谁引用谁」
       const dirTag = x.e.kind==='hard' ? `${x.dir} ` : '';
-      return `<div class="det-row" style="cursor:pointer;" data-gn="${x.other}">· <span class="tag ${cls}">${dirTag}${esc(tag)}</span> ${esc(x.n2.label)}${ev}</div>`;
+      return `<div class="det-card" data-gn="${x.other}"><span class="tag ${cls}">${dirTag}${esc(tag)}</span> <span class="det-card-title">${esc(x.n2.label)}</span>${ev}</div>`;
     }).join('');
   }
   // 概念桥接推荐占位：后端中间件（concepts/concept_links 被动列表）只作桥接依据，不画成图边
@@ -299,7 +299,7 @@ async function graphSelectNode(id){
       if(!box) return;
       if(!recs.length){ box.outerHTML=''; return; }
       let h = `<div class="det-sub"><span class="mono">CONCEPT BRIDGE</span><strong>相关文档 · 概念桥接</strong><b class="mono det-count">${recs.length}</b></div>`
-        + recs.map(x=>`<div class="det-row" style="cursor:pointer;" data-cn="${x.item_id}" title="共享概念：${esc(x.shared_concepts.join('、'))}">· ${esc(x.title)} <span class="tag col">共享：${esc(x.shared_concepts.join('、'))}</span></div>`).join('');
+        + recs.map(x=>`<div class="det-card" data-cn="${x.item_id}" title="共享概念：${esc(x.shared_concepts.join('、'))}"><span class="det-card-title">${esc(x.title)}</span> <span class="tag col">共享：${esc(x.shared_concepts.join('、'))}</span></div>`).join('');
       box.outerHTML = h;
       $('gDetail').querySelectorAll('[data-cn]').forEach(d=>d.onclick=()=>openReader(Number(d.dataset.cn)));
     }catch(e){ const box=$('gConceptRec'); if(box) box.outerHTML=''; }
