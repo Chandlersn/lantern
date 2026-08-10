@@ -365,12 +365,16 @@ def write_kb(title, content, axis_domain=None, review=None):
 
     重要：反馈轴对抗审查（review）**不再写进文章正文**——那样会破坏知识文章的
     独立与纯洁性。改为推入独立的反馈收件箱（数据表），既作消息通知，也作
-    知识库自我更新的指导。文章正文保持纯净。"""
+    知识库自我更新的指导。文章正文保持纯净。
+
+    写回校验：仅当 add_knowledge 成功（拿到条目 id）才推送反馈，避免写回被拒
+    （如 content 为空）时留下 item_id 为空的孤儿反馈。"""
     kb = _load_kb()
     res = kb.add_knowledge(title, content, True, axis_domain)
-    if review:
+    if res.get("ok"):
         new_id = (res.get("item") or {}).get("id")
-        push_review_inbox(kb, new_id, title, axis_domain, review)
+        if new_id and review:
+            push_review_inbox(kb, new_id, title, axis_domain, review)
     return res
 
 
@@ -448,10 +452,13 @@ def upsert_kb(title, content, axis_domain=None, review=None, concept=None, hit_t
         res_id = (res.get("item") or {}).get("id")
         action = "created"
 
-    # 3) 把反馈轴推入独立收件箱（消息通知 + 自我更新指导），与文章正文解耦
-    if review:
+    # 3) 把反馈轴推入独立收件箱（消息通知 + 自我更新指导），与文章正文解耦。
+    #    关键：仅当写回确实成功（拿到有效条目 id）才推送——写回被拒（如 content
+    #    为空）时 res_id 为 None，若仍推送会产生 item_id 为空的孤儿反馈记录。
+    write_ok = bool(res_id)
+    if review and write_ok:
         push_review_inbox(kb, res_id, title, axis_domain, review)
-    return {"ok": True, "action": action, "id": res_id,
+    return {"ok": write_ok, "action": action, "id": res_id,
             "title": (hit or {}).get("title") or title,
             "matched_score": (hit or {}).get("score"), "result": res}
 
@@ -514,12 +521,16 @@ def _cmd_calibrate(_):
 def _cmd_write_kb(args):
     res = write_kb(args.title, args.content, args.axis_domain, args.review)
     print(json.dumps(res, ensure_ascii=False, indent=2))
+    if not res.get("ok"):
+        sys.exit(1)
 
 
 def _cmd_upsert_kb(args):
     res = upsert_kb(args.title, args.content, args.axis_domain, args.review,
                     args.concept, args.hit_threshold)
     print(json.dumps(res, ensure_ascii=False, indent=2))
+    if not res.get("ok"):
+        sys.exit(1)
 
 
 def _cmd_kb_query(args):
