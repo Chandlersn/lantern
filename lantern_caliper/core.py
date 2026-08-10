@@ -526,6 +526,19 @@ def migrate():
       read_at REAL,
       applied_at REAL
     );
+    CREATE TABLE IF NOT EXISTS hatch_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      spark_id INTEGER NOT NULL,
+      item_id INTEGER,
+      decision TEXT NOT NULL,            -- new | merged
+      near_match_item_id INTEGER,        -- 检索到的近似条目（未达合并阈值）
+      cluster_terms TEXT,                -- 来源簇 shared_terms JSON
+      sibling_spark_ids TEXT,            -- 同簇被标 incubating 的兄弟碎片 JSON
+      links_found INTEGER NOT NULL DEFAULT 0,   -- 全库关联发现写出的软边数
+      feedback_ids TEXT,                 -- 反馈收件箱 id JSON
+      axis_domain TEXT,
+      created_at REAL NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS auto_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at REAL NOT NULL,

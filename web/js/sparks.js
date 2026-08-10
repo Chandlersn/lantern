@@ -70,7 +70,7 @@ function bindSparkCards(){
     b.disabled = true; b.textContent = '孵化中';
     try {
       const r = await api('/api/sparks/' + id + '/hatch', {});
-      if(r && r.ok){ toast('已孵化成知识条目 #' + r.item_id); await renderSparks(); }
+      if(r && r.ok){ showHatchReport(r); await renderSparks(); }
       else toast((r && r.msg) ? r.msg : '孵化失败');
     } catch(e){ toast('孵化失败'); }
     finally { b.disabled = false; b.textContent = '孵化成知识'; }
@@ -82,6 +82,49 @@ function bindSparkCards(){
   });
   document.querySelectorAll('#spList .sp-view').forEach(b => b.onclick = () => {
     if(typeof openReader === 'function') openReader(parseInt(b.dataset.id, 10));
+  });
+}
+
+// 智能孵化报告：把「决策 / 关联发现 / 自检反馈 / 兄弟联动」摊开给用户看，
+// 让孵化从「静默搬运」变成一次可见的系统事件。
+function showHatchReport(r){
+  const out = $('spOut');
+  if(!out) return;
+  const merged = r.decision === 'merged';
+  const terms = (r.cluster_terms || []).map(t => `<span class="tag col">${esc(t)}</span>`).join('');
+  const fb = (r.feedback_ids || []).length;
+  const sibs = (r.siblings_incubating || []);
+  const sibBtns = sibs.length
+    ? `<div class="sp-tags" style="margin-top:6px;">同簇 ${sibs.length} 条已标「孵化中」：${
+        sibs.map(id => `<button class="ghost sp-sib" data-id="${id}">孵化 #${id}</button>`).join('')
+      }</div>`
+    : '';
+  out.innerHTML = `<div class="det-card sp-report">
+    <div class="sp-head"><b>智能孵化报告</b>
+      <span class="pill ${merged ? 'warn' : 'llm'}">${merged ? '已合并' : '新建'}</span></div>
+    <div class="sp-body">
+      <div>条目 <b>#${r.item_id}</b> · ${merged
+        ? `已并入既有条目（保留其双尺定位）`
+        : `已落库并接入知识图谱`}</div>
+      ${terms ? `<div class="sp-tags" style="margin-top:4px;">来源簇主题：${terms}</div>` : ''}
+      <div class="sp-tags" style="margin-top:6px;">
+        关联发现：<b>${r.links_found}</b> 条潜在关联
+        ${r.links_found ? `<button class="soft sp-graph">查看图谱</button>` : ''}
+      </div>
+      <div class="sp-tags">自检反馈：<b>${fb}</b> 条已入收件箱${fb ? '（🔔）' : ''}</div>
+      ${sibBtns}
+    </div></div>`;
+  out.querySelectorAll('.sp-graph').forEach(b => b.onclick = () => {
+    if(typeof selectView === 'function') selectView('graph');
+  });
+  out.querySelectorAll('.sp-sib').forEach(b => b.onclick = async () => {
+    b.disabled = true; b.textContent = '孵化中';
+    try {
+      const sr = await api('/api/sparks/' + b.dataset.id + '/hatch', {});
+      if(sr && sr.ok){ showHatchReport(sr); await renderSparks(); }
+      else toast((sr && sr.msg) ? sr.msg : '孵化失败');
+    } catch(e){ toast('孵化失败'); }
+    finally { b.disabled = false; b.textContent = '孵化 #' + b.dataset.id; }
   });
 }
 

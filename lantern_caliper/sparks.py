@@ -225,11 +225,61 @@ def spark_clusters(top_k=8, min_shared=2, min_jac=0.0):
     return out[:top_k]
 
 
-# ----------------------------------------------------------------- 孵化成知识条目
-def hatch_spark(sid, title=None, axis_domain=None, run_closure=True):
-    """孵化：把一条灵感碎片投影成正式知识条目（走 kb.add_knowledge 双尺投影 + 闭环），
-    并回填 hatched_item_id + status=hatched，打通原料 → 成品溯源。
-    延迟导入 kb（避免包加载期循环），调用时包已就绪。"""
+# ----------------------------------------------------------------- 簇归属
+def cluster_of_spark(sid):
+    """返回该碎片所属簇的 (shared_terms, sibling_ids)；不在任何簇则返回 (None, [])。
+
+    用于孵化时把「簇信号」带进投影、并把同簇兄弟标为 incubating 形成联动——
+    碎片间的邻近关系在孵化时不应被丢弃。"""
+    clusters = spark_clusters(top_k=50, min_shared=2, min_jac=0.0)
+    for c in clusters:
+        ids = [m["id"] for m in c["members"]]
+        if sid in ids:
+            sibs = [i for i in ids if i != sid]
+            return (c.get("shared_terms") or []), sibs
+    return None, []
+
+
+def _infer_domain(sp, cluster_terms, kbm):
+    """从碎片标签/簇主题中，尝试匹配一个【受控学科域】作为 axis_domain 建议。
+
+    仅当标签字面命中受控域时才给（诚实、不下结论）；命中不到则返回 None，
+    交由 add_knowledge 启发式自由归类。不臆造域。"""
+    try:
+        controlled = set(kbm.axis_domains() or [])
+    except Exception:                       # noqa: BLE001
+        controlled = set()
+    if not controlled:
+        return None
+    tags = []
+    try:
+        tags = json.loads(sp.get("tags") or "[]") if sp.get("tags") else []
+    except (json.JSONDecodeError, TypeError):
+        tags = []
+    for t in list(tags) + list(cluster_terms or []):
+        if t in controlled:
+            return t
+    return None
+
+
+# ----------------------------------------------------------------- 孵化成知识条目（智能孵化）
+def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
+    """智能孵化：把一条灵感碎片接入知识网，并触发一次小型方法执行 + 系统事件。
+
+    管线（对照「文件移动」式旧孵化）：
+      ① 冗余闸门：先 kb.query 判命中，命中则【增量合并】原条目（保留 id/双尺定位，
+         追加带日期的证据），不新建；未命中则新建。
+      ② 投影富化：查碎片所属簇，提取 shared_terms + 兄弟，预填 axis_domain 建议，
+         并在正文留「孵化自灵感碎片（簇主题：…）」元痕（不下结论仅留痕）。
+      ③ 全库关联发现：新建后以新节点为中心跑 suggest_links，把潜在关联写成
+         links(confirmed=0) 软边，回报 links_found。
+      ④ 反馈轴自检：collision / 新域候选 / 近似未合并 → 各推一条 feedback_inbox，
+         让库自我更新、用户看到 🔔。
+      ⑤ 簇血缘：同簇未孵化兄弟标 incubating（联动），血缘写入 hatch_events。
+      ⑥ 事件日志：把本次孵化的决策/簇/关联数/反馈数/兄弟数落 hatch_events，
+         供 kb.hatch_stats() 聚合（库可「反思」生长；Skill 可据以校准轴绩点）。
+
+    延迟导入 kb/links/feedback（避免包加载期循环）。"""
     sp = get_spark(sid)
     if not sp:
         return {"ok": False, "msg": "碎片不存在"}
@@ -238,15 +288,110 @@ def hatch_spark(sid, title=None, axis_domain=None, run_closure=True):
     content = sp["content"]
     title = (title or sp.get("title") or "").strip() or content[:20]
     import kb as _kb
-    res = _kb.add_knowledge(
-        title, content, bool(run_closure),
-        _kb.normalize_axis_domain(axis_domain) if axis_domain else None)
-    if not res.get("ok"):
-        return res
-    item_id = (res.get("item") or {}).get("id")
+    from . import links as _links
+    from . import feedback as _feedback
+
     con = connect()
+
+    # ② 投影富化：簇信号 + 域建议
+    cluster_terms, siblings = cluster_of_spark(sid)
+    if not axis_domain:
+        axis_domain = _infer_domain(sp, cluster_terms, _kb)
+
+    # ① 冗余闸门：先检索判命中（复用 upsert-kb 的命中逻辑）
+    qres = _kb.query(title, top_k=1)
+    results = qres.get("results") or []
+    hit, near = None, None
+    if results:
+        top = results[0]
+        sc = float(top.get("score", 0) or 0)
+        if sc >= hit_threshold:
+            hit = top
+        elif sc > 0:
+            near = top
+
+    feedback_ids, links_found, decision, item_id, new_item = [], 0, "new", None, None
+
+    if hit:
+        # 合并：保留原条目 id / 双尺定位，追加带日期的证据
+        decision = "merged"
+        item_id = hit["id"]
+        append_to_item(item_id, content, label="灵感碎片孵化合并")
+        fid = _feedback.push_feedback(
+            item_id, hit.get("title", title), axis_domain,
+            {"type": "hatch_merged",
+             "note": f"灵感碎片「{title}」已并入此条目（保留原双尺定位）",
+             "spark_id": sid}, severity="info")
+        feedback_ids.append(fid)
+    else:
+        # 新建 + 投影富化元痕 + 关联发现 + 反馈自检
+        res = _kb.add_knowledge(
+            title, content, bool(run_closure),
+            _kb.normalize_axis_domain(axis_domain) if axis_domain else None)
+        if not res.get("ok"):
+            con.close()
+            return res
+        new_item = res.get("item") or {}
+        item_id = new_item.get("id")
+        if cluster_terms:
+            note = "、".join(cluster_terms[:4])
+            append_to_item(
+                item_id, f"本条目孵化自灵感碎片，簇主题：{note}", label="碎片来源")
+        # ③ 全库关联发现：以新节点为中心，写软边
+        try:
+            sug = _links.suggest_links(k=8, min_shared=2, persist=True, anchor=item_id)
+            links_found = len(sug.get("suggestions") or [])
+        except Exception:                      # noqa: BLE001
+            links_found = 0
+        # ④ 反馈轴自检
+        if new_item.get("collision"):
+            feedback_ids.append(_feedback.push_feedback(
+                item_id, title, axis_domain,
+                {"type": "hatch_collision",
+                 "note": "孵化条目坐标偏离所在域典型读数，建议人工核对标签/关联",
+                 "offset": new_item.get("offset")}, severity="warn"))
+        if axis_domain and axis_domain not in (_kb.axis_domains() or []):
+            feedback_ids.append(_feedback.push_feedback(
+                item_id, title, axis_domain,
+                {"type": "hatch_new_domain",
+                 "note": f"孵化使用了库内尚未登记的学科域「{axis_domain}」，建议登记入 axes 受控词表",
+                 "domain": axis_domain}, severity="info"))
+        if near:
+            feedback_ids.append(_feedback.push_feedback(
+                item_id, title, axis_domain,
+                {"type": "hatch_near",
+                 "note": f"与条目「{near.get('title')}」(# {near.get('id')}) 内容相近但未达合并阈值，已建立软边待确认",
+                 "near_id": near.get("id")}, severity="info"))
+
+    # ⑤ 簇血缘：同簇未孵化兄弟标 incubating（联动）
+    sib_incubating = []
+    for sibid in siblings:
+        s = get_spark(sibid)
+        if s and not s.get("hatched_item_id"):
+            update_spark_status(sibid, "incubating")
+            sib_incubating.append(sibid)
+
+    # 回填 spark → item 溯源
+    now = time.time()
     con.execute(
         "UPDATE sparks SET status='hatched', hatched_item_id=?, updated_at=? WHERE id=?",
-        (item_id, time.time(), sid))
+        (item_id, now, sid))
+    # ⑥ 事件日志
+    con.execute(
+        "INSERT INTO hatch_events(spark_id,item_id,decision,near_match_item_id,"
+        "cluster_terms,sibling_spark_ids,links_found,feedback_ids,axis_domain,created_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (sid, item_id, decision, (near or {}).get("id"),
+         json.dumps(cluster_terms, ensure_ascii=False),
+         json.dumps(sib_incubating, ensure_ascii=False),
+         links_found, json.dumps(feedback_ids, ensure_ascii=False),
+         axis_domain, now))
     con.commit(); con.close()
-    return {"ok": True, "spark_id": sid, "item_id": item_id, "item": res.get("item")}
+    return {
+        "ok": True, "spark_id": sid, "item_id": item_id, "decision": decision,
+        "near_match_item_id": (near or {}).get("id"),
+        "cluster_terms": cluster_terms, "siblings_incubating": sib_incubating,
+        "siblings_total": siblings, "links_found": links_found,
+        "feedback_ids": feedback_ids, "axis_domain": axis_domain,
+        "item": (new_item or hit),
+    }

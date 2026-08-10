@@ -18,9 +18,11 @@ REST（server.py）与 MCP（mcp_server.py）两套接口共用同一实现，
 全部仅依赖 Python 标准库 + 兄弟模块（store / llm）。
 """
 
+import json
 import math
 import os
 import re
+import time
 
 import lantern_caliper as store
 
@@ -1195,14 +1197,15 @@ TOOLS = [
     },
     {
         "name": "kb_hatch_spark",
-        "description": "孵化灵感碎片：把一条碎片投影成正式知识条目（走双尺定位+阴阳闭环），并回填溯源。返回新条目坐标。axis_domain 可选更细学科方向。",
+        "description": "智能孵化灵感碎片：冗余闸门(命中则增量合并保留双尺)→投影富化(注入簇信号)→全库关联发现(以新节点为中心写软边)→反馈轴自检(推送收件箱)→簇血缘(兄弟联动)→事件日志。返回决策/关联数/反馈/兄弟等报告。",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "spark_id": {"type": "integer", "description": "碎片 id（必填）"},
                 "title": {"type": "string", "description": "可选覆写标题"},
-                "axis_domain": {"type": "string", "description": "可选受控学科域"},
-                "run_closure": {"type": "boolean", "description": "是否自动跑阴阳闭环，默认 true"}
+                "axis_domain": {"type": "string", "description": "可选受控学科域；缺省则从簇主题/标签推断"},
+                "run_closure": {"type": "boolean", "description": "是否自动跑阴阳闭环，默认 true"},
+                "hit_threshold": {"type": "number", "description": "冗余闸门命中阈值(kb.query top 分)，默认 4.0；≥此分视为同一概念→合并"}
             },
             "required": ["spark_id"]
         }
@@ -1217,6 +1220,14 @@ TOOLS = [
                 "min_shared": {"type": "integer", "description": "成簇最少共享词数，默认 2"},
                 "min_jac": {"type": "number", "description": "成簇最小 Jaccard 重叠比，默认 0（不卡 Jaccard，仅以共享词数为门槛；>0 时作额外收紧）"}
             }
+        }
+    },
+    {
+        "name": "kb_hatch_stats",
+        "description": "智能孵化事件聚合：总孵化数、按决策(new/merged)分布、按学科域分布、近 7 天趋势、累计关联发现/反馈/簇血缘数。供 Skill 据以校准轴绩点（库自我反思生长）。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {}
         }
     },
 ]
@@ -1261,8 +1272,53 @@ def add_spark(content, title=None, tags=None, source="manual"):
 def spark_clusters(top_k=8, min_shared=2, min_jac=0.0):
     return store.spark_clusters(top_k, min_shared, min_jac)
 
-def hatch_spark(spark_id, title=None, axis_domain=None, run_closure=True):
-    return store.hatch_spark(int(spark_id), title, axis_domain, run_closure)
+def hatch_spark(spark_id, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
+    return store.hatch_spark(int(spark_id), title, axis_domain, run_closure, hit_threshold)
+
+
+def hatch_stats():
+    """孵化事件聚合：让知识库能「反思」自己的生长（智能孵化的第 ⑥ 阶段数据侧）。
+
+    返回：总孵化数、按决策(new/merged)分布、按学科带分布、近 7 天趋势、
+    累计关联发现数 / 反馈数 / 簇血缘数。Skill 可据以校准「轴绩点」（哪些透镜最近热）。
+
+    注：本函数只产出数据，不写回 Skill 状态——KB 守数据本职、Skill 驾驭迭代的
+    边界已锁定，故由 Skill 主动读取本函数，而非 KB 反向侵入 Skill 状态目录。"""
+    con = store.connect()
+    try:
+        rows = con.execute(
+            "SELECT decision, axis_domain, links_found, feedback_ids, "
+            "sibling_spark_ids, item_id, created_at FROM hatch_events").fetchall()
+    finally:
+        con.close()
+    total = len(rows)
+    by_decision = {"new": 0, "merged": 0}
+    by_band = {}
+    recent = 0
+    cutoff = time.time() - 7 * 86400
+    sum_links = sum_links_total = 0
+    sum_fb = sum_fb_total = 0
+    sum_sib = 0
+    for r in rows:
+        by_decision[r["decision"]] = by_decision.get(r["decision"], 0) + 1
+        if r["created_at"] >= cutoff:
+            recent += 1
+        sum_links_total += (r["links_found"] or 0)
+        try:
+            sum_fb_total += len(json.loads(r["feedback_ids"] or "[]"))
+        except (json.JSONDecodeError, TypeError):
+            pass
+        try:
+            sum_sib += len(json.loads(r["sibling_spark_ids"] or "[]"))
+        except (json.JSONDecodeError, TypeError):
+            pass
+        if r["axis_domain"]:
+            by_band[r["axis_domain"]] = by_band.get(r["axis_domain"], 0) + 1
+    return {
+        "total": total, "by_decision": by_decision, "by_domain": by_band,
+        "recent_7d": recent, "links_discovered": sum_links_total,
+        "feedback_raised": sum_fb_total, "siblings_linked": sum_sib,
+    }
 
 
 def dispatch(name, args):
@@ -1301,11 +1357,15 @@ def dispatch(name, args):
                         args.get("tags"), args.get("source", "manual"))
     if name == "kb_hatch_spark":
         return hatch_spark(args.get("spark_id"), args.get("title"),
-                          args.get("axis_domain"), bool(args.get("run_closure", True)))
+                          args.get("axis_domain"),
+                          bool(args.get("run_closure", True)),
+                          float(args.get("hit_threshold", 4.0)))
     if name == "kb_spark_clusters":
         return {"clusters": spark_clusters(int(args.get("top_k", 8)),
                                           int(args.get("min_shared", 2)),
                                           float(args.get("min_jac", 0.0)))}
+    if name == "kb_hatch_stats":
+        return hatch_stats()
     if name == "kb_health":
         return health()
     if name == "kb_edges":

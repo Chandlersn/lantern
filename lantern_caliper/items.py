@@ -245,6 +245,34 @@ def _content_rev(content):
     """正文内容版本指纹（短哈希），供乐观并发守卫比对，避免双窗口/后台互踩静默覆盖。"""
     return hashlib.sha256((content or "").encode("utf-8")).hexdigest()[:16]
 
+
+def append_to_item(item_id, text, label="孵化合并"):
+    """向条目正文【追加】一段证据，**保留原双尺定位（不重投影）**。
+
+    用于灵感碎片孵化「命中合并」场景：碎片观点并入既有条目，但既有条目的
+    主尺/游标是已经校准过的，不应被重新测量覆盖。只拼接带日期/标签的块 +
+    写日志 + 同步文章镜像。返回 {ok,item_id}。"""
+    if not text or not text.strip():
+        return {"ok": False, "msg": "追加内容为空"}
+    con = connect()
+    row = con.execute("SELECT id,content,title FROM items WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        con.close()
+        return {"ok": False, "msg": "条目不存在"}
+    today = time.strftime("%Y-%m-%d")
+    old = row["content"] or ""
+    block = f"[{today} {label}] {text}"
+    new = (old.rstrip() + "\n\n" + block) if old.strip() else block
+    con.execute("UPDATE items SET content=? WHERE id=?", (new, item_id))
+    log(con, item_id, "system",
+        f"孵化合并：追加碎片证据「{text[:30]}…」（保留原双尺定位）")
+    con.commit(); con.close()
+    try:
+        write_article_file(item_id)
+    except Exception:                              # noqa: BLE001
+        pass
+    return {"ok": True, "item_id": item_id}
+
 def update_item(item_id, title, content, axis_domain=None, rev=None):
     """更新条目内容：同步只做「本地启发式定位 + 落库 + 本地向量/摘要 + 写文件」，
     响应秒回；llm 模式下的真实模型读数与向量/摘要升级交给后台 _refine 线程补算。

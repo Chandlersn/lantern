@@ -147,6 +147,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json({"items": items, "count": len(items)})
             if p.path == "/api/sparks/clusters":
                 return self._json({"clusters": store.spark_clusters()})
+            if p.path == "/api/hatch/stats":
+                return self._json(kb.hatch_stats())
             # -------------------------------------------- 知识库 REST 接口
             if p.path == "/api/kb/state":
                 return self._json(kb.state())
@@ -342,7 +344,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if len(parts) >= 2 and parts[1] == "hatch":
                     return self._json(kb.hatch_spark(
                         sid, body.get("title"), body.get("axis_domain"),
-                        bool(body.get("run_closure", True))))
+                        bool(body.get("run_closure", True)),
+                        float(body.get("hit_threshold", 4.0))))
                 if len(parts) >= 2 and parts[1] == "delete":
                     return self._json({"ok": store.delete_spark(sid)})
                 # 默认：改状态 / 标签

@@ -514,8 +514,11 @@ def _idf_cos(A, B, df, N):
     nb = math.sqrt(sum(x * x for x in vb.values())) or 1.0
     return num / (na * nb)
 
-def suggest_links(k=8, min_score=0.0, min_shared=2, persist=False):
+def suggest_links(k=8, min_score=0.0, min_shared=2, persist=False, anchor=None):
     """「该连未连」：意思上**真有共同话题**、却还没互链的条目对。
+
+    anchor：传入某条目 id 时，只返回与该条目相关的候选对（用于「以新孵化节点
+    为中心」重织图谱，而不扫描全库）。其余 R0–R3 门槛与全量扫描完全一致。
 
     persist=True 时，把通过的候选写入 links(kind='soft',confirmed=0,evidence=共享词)，
     作为知识图谱的「软边」——用户可在图谱里一键确认/忽略，而不是被悄悄连上。
@@ -578,6 +581,8 @@ def suggest_links(k=8, min_score=0.0, min_shared=2, persist=False):
         for bi in range(ai + 1, len(ids)):
             a, b = ids[ai], ids[bi]
             if tuple(sorted((a, b))) in linked:    # 已连过不重复提
+                continue
+            if anchor is not None and anchor not in (a, b):  # 仅围绕新节点
                 continue
             cross = by_id[a].get("band") != by_id[b].get("band")
             shared_spec = adm[a] & adm[b]

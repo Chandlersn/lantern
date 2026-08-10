@@ -370,9 +370,18 @@
   <ul>
     <li><b>捕获（spark-add）</b>：随手记一条想法，存进 <code>sparks</code> 表，<code>status</code> 恒为 <code>raw</code>。捕获界面不出现领域带 / 游标读数。</li>
     <li><b>聚类萌发（spark-clusters）</b>：离线关键词共现 + 并查集聚类，<b>只呈现"这些碎片似乎在讲同一件事"</b>的主题簇（<code>shared_terms</code> + <code>members</code>）。它是"摊开结构、不下结论"的软洞察——绝不替你判定该合并，孵不孵化由人定。</li>
-    <li><b>孵化（spark-hatch）</b>：把碎片交给 <code>kb.add_knowledge</code> 走正常双尺投影 + 阴阳闭环，落为正式 <code>items</code> 条目；并回填 <code>hatched_item_id</code> + <code>status=hatched</code>，打通"原料 → 成品"的溯源链。</li>
+    <li><b>智能孵化（spark-hatch）</b>：孵化不是"把碎片搬进 items 表"，而是触发全库联动的<b>一次系统事件</b>。它由 <code>kb.hatch_spark</code> 执行六阶段管线，让新原料真正"接入并重塑整张知识网"：
+      <ol>
+        <li><b>冗余闸门</b>：孵化前先 <code>kb.query</code> 判命中（阈值默认 4.0）。命中则<b>增量合并</b>既有条目——保留其 id 与双尺定位，仅追加带日期的证据——不新建；未命中才新建。这复用步骤 E <code>upsert-kb</code> 的命中逻辑，从根上消除"同一想法重复建条目"的搬运感。</li>
+        <li><b>投影富化</b>：查碎片所属簇，把 <code>shared_terms</code> 预填 <code>axis_domain</code> 建议，并在正文留"孵化自灵感碎片（簇主题：…）"元痕（不下结论，仅留痕）。</li>
+        <li><b>全库关联发现</b>：新建后以新节点为中心跑 <code>suggest_links</code>，把潜在关联写成 <code>links(confirmed=0)</code> 软边，回报 <code>links_found</code>——新条目立即重织知识图谱，这就是"整体知识库的一点点关联影响"。</li>
+        <li><b>反馈轴自检</b>：坐标偏离所在域典型（collision）/ 使用了库未注册的新域 / 有近似但未达合并阈值的条目 → 各推一条 <code>feedback_inbox</code>（🔔），让库自我更新、用户看到提示。</li>
+        <li><b>簇血缘</b>：同簇未孵化兄弟自动标 <code>incubating</code>（联动），血缘写入 <code>hatch_events</code>；溯源从"碎片→条目"升级为"簇→多条目 + 兄弟联动"。</li>
+        <li><b>事件日志</b>：本次孵化落 <code>hatch_events</code>，供 <code>kb.hatch_stats()</code> 聚合（总孵化数 / 按决策·学科域分布 / 近 7 天趋势 / 累计关联·反馈·血缘数）——库能"反思"自己的生长，Skill 可据以校准轴绩点（哪些透镜最近热）。</li>
+      </ol>
+    </li>
   </ul>
-  <p>出口有两种：碎片已较完整则<b>直接孵化</b>（轻量投影）；碎片只是粗糙出发点则先转<b>步骤 A–E 深度策展</b>（多轴拆解）再孵化。无论哪条路，<b>闭环都从原点启动</b>。前端「灵感碎片」视图（捕获盒 / 列表 / 聚类 / 孵化）与 <code>/api/sparks/*</code> 接口、以及 lantern-method 的<b>步骤 0</b>，都走同一套 <code>kb.*</code> 引擎，行为一致。</p>
+  <p>出口有两种：碎片已较完整则<b>直接智能孵化</b>（六阶段管线）；碎片只是粗糙出发点则先转<b>步骤 A–E 深度策展</b>（多轴拆解）再孵化。无论哪条路，<b>闭环都从原点启动</b>。前端「灵感碎片」视图（捕获盒 / 列表 / 聚类 / 孵化报告）与 <code>/api/sparks/*</code>、<code>/api/hatch/stats</code> 接口、以及 lantern-method 的<b>步骤 0</b>，都走同一套 <code>kb.*</code> 引擎，行为一致。</p>
 
   <footer>
     灯笼 · 多维轴认知框架 · 工作台模块 / 智能知识库系统　|　理论修订稿 v6 · schema 1.0.0 · 已留 agent 双通道接口（REST + MCP）　|　含灵感碎片原料层 / 反馈收件箱 / 概念衍生层 / 信号完整性守卫　|　宣纸墨韵主题

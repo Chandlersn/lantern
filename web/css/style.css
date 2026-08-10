@@ -579,6 +579,7 @@
 
   /* 灵感碎片（原料层） */
   #view-sparks .sp-card, #view-sparks .sp-cluster{margin-bottom:12px;}
+  #view-sparks .sp-report{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
   .sp-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
   .sp-head b{font-size:13.5px;color:var(--ink);}
   .sp-body{font-size:13px;color:var(--ink);line-height:1.6;margin:6px 0;white-space:pre-wrap;word-break:break-word;}
