@@ -570,6 +570,7 @@
   .fb-flag{font-size:11.5px;color:var(--cinnabar);margin-top:4px;}
   .fb-acts{display:flex;gap:6px;flex-wrap:wrap;}
   .fb-acts button{font-size:12px;padding:5px 10px;}
+  .fb-hint{display:block;width:100%;font-size:12px;margin-top:2px;line-height:1.4;}
 
   /* 严重度小圆点 */
   .fb-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--stone);vertical-align:middle;}
@@ -579,6 +580,43 @@
 
   /* 灵感碎片（原料层） */
   #view-sparks .sp-card, #view-sparks .sp-cluster{margin-bottom:12px;}
+  /* 灵感原料舱：把未投影的碎片整体隔离在一个独立盒子里，与知识库视觉切割 */
+  .sp-vault{border:1.5px dashed var(--cinnabar);border-radius:16px;padding:16px 18px 4px;
+            background:rgba(181,48,42,.035);margin-bottom:18px;}
+  .sp-vault-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;
+                   padding-bottom:12px;border-bottom:1px dashed var(--line);}
+  .sp-vault-tag{flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:var(--cinnabar);
+                border-radius:999px;padding:3px 11px;letter-spacing:.5px;white-space:nowrap;}
+  .sp-vault-note{font-size:12px;color:var(--muted);line-height:1.6;}
+  /* 碎片卡片：明确做成"盒子"，与正式知识卡片区分；原料态=草稿/隔离视觉 */
+  #view-sparks .sp-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+                        padding:12px 14px;}
+  #view-sparks .sp-card.sp-card--raw{border-left:3px dashed var(--cinnabar);
+            background:linear-gradient(0deg,rgba(181,48,42,.05),rgba(181,48,42,.05)),var(--card);}
+  #view-sparks .sp-card.sp-card--hatched{opacity:.94;}
+  /* 碎片内联编辑表单（双击卡片进入） */
+  #view-sparks .sp-card{cursor:pointer;}
+  #view-sparks .sp-card.sp-editing{cursor:default;}
+  .sp-edit{display:flex;flex-direction:column;gap:8px;}
+  .sp-edit input, .sp-edit textarea{width:100%;font:inherit;color:var(--ink);
+            background:var(--paper);border:1px solid var(--line);border-radius:8px;
+            padding:7px 9px;box-sizing:border-box;}
+  .sp-edit textarea{min-height:72px;resize:vertical;line-height:1.6;}
+  .sp-edit .sp-acts{justify-content:flex-end;}
+  /* 碰撞创作草稿编辑器（孵化阶段一内联渲染） */
+  .sp-draft{display:flex;flex-direction:column;gap:8px;}
+  .sp-draft-meta{font-size:12.5px;color:var(--ink);line-height:1.6;
+    background:rgba(181,48,42,.06);border:1px solid rgba(181,48,42,.25);
+    border-radius:8px;padding:8px 10px;}
+  .sp-draft textarea.sp-draft-area{width:100%;min-height:260px;resize:vertical;
+    font:13.5px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    color:var(--ink);background:var(--paper);border:1px solid var(--line);
+    border-radius:10px;padding:11px 12px;box-sizing:border-box;white-space:pre-wrap;}
+  .sp-draft .sp-acts{justify-content:flex-end;align-items:center;}
+  .sp-rel{margin-top:6px;font-size:12.5px;color:var(--muted);}
+  .sp-rel summary{cursor:pointer;user-select:none;}
+  .sp-rel-list{margin:6px 0 0;padding-left:18px;}
+  .sp-rel-list li{margin-bottom:6px;line-height:1.5;}
   #view-sparks .sp-report{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
   .sp-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
   .sp-head b{font-size:13.5px;color:var(--ink);}

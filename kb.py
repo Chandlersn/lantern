@@ -1196,6 +1196,20 @@ TOOLS = [
         }
     },
     {
+        "name": "kb_update_spark",
+        "description": "编辑一条灵感碎片（content/title/tags 任一可改，不给则不改）。已孵化的碎片不可在原料层改，提示去知识库改。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "spark_id": {"type": "integer", "description": "碎片 id（必填）"},
+                "content": {"type": "string", "description": "新的正文（可选；不给则不改）"},
+                "title": {"type": "string", "description": "新的标题（可选）"},
+                "tags": {"type": "string", "description": "新的标签，逗号分隔（可选）"}
+            },
+            "required": ["spark_id"]
+        }
+    },
+    {
         "name": "kb_hatch_spark",
         "description": "智能孵化灵感碎片：冗余闸门(命中则增量合并保留双尺)→投影富化(注入簇信号)→全库关联发现(以新节点为中心写软边)→反馈轴自检(推送收件箱)→簇血缘(兄弟联动)→事件日志。返回决策/关联数/反馈/兄弟等报告。",
         "inputSchema": {
@@ -1208,6 +1222,36 @@ TOOLS = [
                 "hit_threshold": {"type": "number", "description": "冗余闸门命中阈值(kb.query top 分)，默认 4.0；≥此分视为同一概念→合并"}
             },
             "required": ["spark_id"]
+        }
+    },
+    {
+        "name": "kb_draft_hatch",
+        "description": "智能孵化·阶段一：对灵感碎片生成「碰撞创作草稿」（结合知识库相关内容合成，不落库）。返回 decision(merged/new)/merge_target/相关素材/可编辑 draft 正文。落库请再调 kb_commit_hatch。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "spark_id": {"type": "integer", "description": "碎片 id（必填）"},
+                "title": {"type": "string", "description": "可选覆写标题"},
+                "axis_domain": {"type": "string", "description": "可选受控学科域；缺省则从簇主题/标签推断"},
+                "run_closure": {"type": "boolean", "description": "确认阶段是否自动跑阴阳闭环，默认 true"},
+                "hit_threshold": {"type": "number", "description": "冗余闸门命中阈值，默认 4.0"}
+            },
+            "required": ["spark_id"]
+        }
+    },
+    {
+        "name": "kb_commit_hatch",
+        "description": "智能孵化·阶段二：用户微调草稿后确认入库。content 为用户编辑后的正文（必填）；按冗余闸门自动决定并入既有条目或新建。返回六阶段完整报告。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "spark_id": {"type": "integer", "description": "碎片 id（必填）"},
+                "content": {"type": "string", "description": "用户微调后的草稿正文（必填）"},
+                "title": {"type": "string", "description": "可选覆写标题"},
+                "axis_domain": {"type": "string", "description": "可选受控学科域"},
+                "hit_threshold": {"type": "number", "description": "冗余闸门命中阈值，默认 4.0"}
+            },
+            "required": ["spark_id", "content"]
         }
     },
     {
@@ -1269,11 +1313,25 @@ def sparks(status=None, limit=500):
 def add_spark(content, title=None, tags=None, source="manual"):
     return store.add_spark(content, title, tags, source)
 
+
+def update_spark(sid, content=None, title=None, tags=None):
+    return store.update_spark(int(sid), content, title, tags)
+
 def spark_clusters(top_k=8, min_shared=2, min_jac=0.0):
     return store.spark_clusters(top_k, min_shared, min_jac)
 
 def hatch_spark(spark_id, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
     return store.hatch_spark(int(spark_id), title, axis_domain, run_closure, hit_threshold)
+
+
+def draft_hatch(spark_id, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
+    """阶段一：生成碰撞创作草稿（不落库）。供前端展示/用户微调。"""
+    return store.draft_hatch(int(spark_id), title, axis_domain, run_closure, hit_threshold)
+
+
+def commit_hatch(spark_id, content, title=None, axis_domain=None, hit_threshold=4.0):
+    """阶段二：用户微调草稿后确认入库。content 为用户编辑后的正文（必填）。"""
+    return store.commit_hatch(int(spark_id), content, title, axis_domain, hit_threshold)
 
 
 def hatch_stats():
@@ -1355,11 +1413,23 @@ def dispatch(name, args):
     if name == "kb_add_spark":
         return add_spark(args.get("content"), args.get("title"),
                         args.get("tags"), args.get("source", "manual"))
+    if name == "kb_update_spark":
+        return update_spark(args.get("spark_id"), args.get("content"),
+                           args.get("title"), args.get("tags"))
     if name == "kb_hatch_spark":
         return hatch_spark(args.get("spark_id"), args.get("title"),
                           args.get("axis_domain"),
                           bool(args.get("run_closure", True)),
                           float(args.get("hit_threshold", 4.0)))
+    if name == "kb_draft_hatch":
+        return draft_hatch(args.get("spark_id"), args.get("title"),
+                           args.get("axis_domain"),
+                           bool(args.get("run_closure", True)),
+                           float(args.get("hit_threshold", 4.0)))
+    if name == "kb_commit_hatch":
+        return commit_hatch(args.get("spark_id"), args.get("content"),
+                            args.get("title"), args.get("axis_domain"),
+                            float(args.get("hit_threshold", 4.0)))
     if name == "kb_spark_clusters":
         return {"clusters": spark_clusters(int(args.get("top_k", 8)),
                                           int(args.get("min_shared", 2)),

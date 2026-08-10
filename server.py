@@ -346,6 +346,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                         sid, body.get("title"), body.get("axis_domain"),
                         bool(body.get("run_closure", True)),
                         float(body.get("hit_threshold", 4.0))))
+                if len(parts) >= 2 and parts[1] == "draft":
+                    # 阶段一：生成碰撞创作草稿（不落库），供前端展示/编辑
+                    return self._json(kb.draft_hatch(
+                        sid, body.get("title"), body.get("axis_domain"),
+                        bool(body.get("run_closure", True)),
+                        float(body.get("hit_threshold", 4.0))))
+                if len(parts) >= 2 and parts[1] == "commit":
+                    # 阶段二：用户微调草稿后确认入库
+                    return self._json(kb.commit_hatch(
+                        sid, body.get("content"), body.get("title"),
+                        body.get("axis_domain"),
+                        float(body.get("hit_threshold", 4.0))))
+                if len(parts) >= 2 and parts[1] == "update":
+                    return self._json(store.update_spark(
+                        sid, body.get("content"), body.get("title"), body.get("tags")))
                 if len(parts) >= 2 and parts[1] == "delete":
                     return self._json({"ok": store.delete_spark(sid)})
                 # 默认：改状态 / 标签

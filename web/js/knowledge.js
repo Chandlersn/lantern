@@ -63,7 +63,6 @@ function renderKnowledge(){
     if(r.ok===false){ alert(r.msg||'删除失败'); b.disabled=false; b.textContent='删除'; return; }
     if(curId===id) curId = null;
     await load();
-    alert(`已删除「${r.title}」`);
   });
   $('kbCount').textContent = `· 共 ${total} 条` + (total > KB_PAGE_SIZE ? ` · 第 ${kbPage}/${totalPages} 页` : '');
   renderKbPager(totalPages);

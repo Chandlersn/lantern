@@ -16,6 +16,7 @@ import time
 from collections import Counter
 
 from .core import *
+from .core import _llm, LLM_OK  # 碰撞创作草稿用大模型合成（离线兜底在 _compose_draft 内）
 
 
 # ----------------------------------------------------------------- 行格式化
@@ -145,6 +146,39 @@ def update_spark_status(sid, status, tags=None):
     return ok
 
 
+def update_spark(sid, content=None, title=None, tags=None):
+    """编辑一条灵感碎片：content/title/tags 任一可改（None 表示不改该字段）。
+    已孵化（hatched）的碎片正文已投影进知识库，原料层不再允许编辑，提示去知识库改。
+    返回 {ok, id, msg?}。"""
+    con = connect()
+    row = con.execute("SELECT status FROM sparks WHERE id=?", (sid,)).fetchone()
+    if not row:
+        con.close()
+        return {"ok": False, "msg": "碎片不存在"}
+    if row[0] == "hatched":
+        con.close()
+        return {"ok": False, "msg": "该碎片已孵化，内容请在知识库中修改"}
+    fields, vals = [], []
+    if content is not None:
+        content = content.strip()
+        if not content:
+            con.close()
+            return {"ok": False, "msg": "内容不能为空"}
+        fields.append("content=?"); vals.append(content)
+    if title is not None:
+        fields.append("title=?"); vals.append(title.strip() or None)
+    if tags is not None:
+        fields.append("tags=?"); vals.append(_norm_tags(tags))
+    if not fields:
+        con.close()
+        return {"ok": True, "id": sid, "msg": "无变更"}
+    fields.append("updated_at=?"); vals.append(time.time()); vals.append(sid)
+    con.execute("UPDATE sparks SET {} WHERE id=?".format(", ".join(fields)), vals)
+    ok = con.total_changes > 0
+    con.commit(); con.close()
+    return {"ok": ok, "id": sid}
+
+
 def delete_spark(sid):
     con = connect()
     cur = con.execute("DELETE FROM sparks WHERE id=?", (sid,))
@@ -262,9 +296,102 @@ def _infer_domain(sp, cluster_terms, kbm):
     return None
 
 
-# ----------------------------------------------------------------- 孵化成知识条目（智能孵化）
-def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
-    """智能孵化：把一条灵感碎片接入知识网，并触发一次小型方法执行 + 系统事件。
+# ----------------------------------------------------------------- 孵化成知识条目（智能孵化 · 两阶段）
+def _compose_draft(title, spark_content, cluster_terms, related, decision, hit):
+    """碰撞创作：结合知识库相关内容，把灵感碎片合成一篇可入库的临时文章。
+
+    优先真实大模型；不可用/失败则退回本地模板（仍可编辑）。本函数【不落库】——
+    由 commit 阶段决定是新建还是并入。"""
+    related_text = "\n\n".join(
+        f"【相关条目 #{r['id']} {r.get('title', '')}】\n{r.get('excerpt', '')}"
+        for r in (related or [])[:3])
+    if decision == "merged" and hit:
+        sys_p = ("你是知识整理助手。下面给出一段「新的灵感碎片」和一篇「已有知识条目」。"
+                 "请基于已有条目的既有内容，把这条新灵感【吸收、融合】成一段可追加到该条目下的"
+                 "补充内容：聚焦新意，不要复述已有条目已讲透的部分；保留原条目的视角与术语；"
+                 "输出纯文本（可分段，不用标题），300-600 字。")
+        usr = (f"已有条目《{hit.get('title', '')}》片段：\n{hit.get('content', '')[:900]}\n\n"
+               f"新灵感碎片：\n{spark_content}")
+    else:
+        sys_p = ("你是知识整理助手。下面给出一段「灵感碎片」和若干「知识库中相关的条目素材」。"
+                 "请围绕碎片主题，把这些素材【碰撞、综合】成一篇结构清晰、可独立入库的知识短文："
+                 "含 2-4 个小标题与要点，逻辑连贯，不堆砌；输出 Markdown，500-900 字，无需额外解释。")
+        usr = f"灵感碎片：\n{spark_content}\n\n知识库相关素材：\n{related_text}"
+    if LLM_OK:
+        try:
+            raw, _ = _llm.chat(sys_p, usr, temperature=0.4, max_tokens=1000,
+                               timeout=45, retries=1)
+            if raw and raw.strip():
+                return raw.strip()
+        except Exception:                          # noqa: BLE001
+            pass
+    return _local_draft(title, spark_content, cluster_terms, related, decision, hit)
+
+
+def _local_draft(title, spark_content, cluster_terms, related, decision, hit):
+    """离线兜底草稿：直接摊开碎片 + 相关素材，标注为待润色的初稿（仍可编辑后入库）。"""
+    lines = [f"# {title}", "",
+             "> 以下为离线初稿（未调用大模型），可据此润色后入库。", "",
+             "## 灵感碎片原文", spark_content, ""]
+    if cluster_terms:
+        lines += ["## 来源簇主题", "、".join(cluster_terms[:5]), ""]
+    if related:
+        lines += ["## 知识库相关素材（碰撞参考）"]
+        for r in related[:3]:
+            lines.append(f"- #{r['id']} {r.get('title', '')}：{r.get('excerpt', '')[:120]}")
+        lines.append("")
+    if decision == "merged" and hit:
+        lines += [f"## 将并入《{hit.get('title', '')}》# {hit.get('id')}",
+                  "（请在此补充与已有条目互补的新内容）", ""]
+    return "\n".join(lines)
+
+
+def draft_hatch(sid, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
+    """阶段一：生成碰撞创作草稿（【不落库】），返回 proposal 供前端展示/编辑。
+
+    产出：decision(merged/new)、merge_target_*（命中条目标识）、near_match_item_id、
+    cluster_terms、siblings、related_items（供展示与碰撞）、draft（AI 合成的可编辑正文）。
+    全程只读（查询 + 聚类 + LLM），不创建条目、不改状态、不写事件。"""
+    sp = get_spark(sid)
+    if not sp:
+        return {"ok": False, "msg": "碎片不存在"}
+    if sp.get("hatched_item_id"):
+        return {"ok": False, "msg": "该碎片已孵化", "item_id": sp["hatched_item_id"]}
+    content = sp["content"]
+    title = (title or sp.get("title") or "").strip() or content[:20]
+    import kb as _kb
+    cluster_terms, siblings = cluster_of_spark(sid)
+    if not axis_domain:
+        axis_domain = _infer_domain(sp, cluster_terms, _kb)
+    # 冗余闸门 + 取相关条目（供碰撞创作与展示）
+    qres = _kb.query(title, top_k=4)
+    results = qres.get("results") or []
+    hit, near, related = None, None, []
+    for r in results:
+        sc = float(r.get("score", 0) or 0)
+        if sc >= hit_threshold and hit is None:
+            hit = r
+        elif hit is None and near is None and sc > 0:
+            near = r
+        if r.get("id") is not None and r.get("content"):
+            related.append({"id": r["id"], "title": r.get("title", ""),
+                            "excerpt": (r.get("content") or "")[:240],
+                            "score": round(sc, 2)})
+    decision = "merged" if hit else "new"
+    draft = _compose_draft(title, content, cluster_terms, related, decision, hit)
+    return {
+        "ok": True, "spark_id": sid, "title": title, "axis_domain": axis_domain,
+        "decision": decision,
+        "merge_target_id": (hit or {}).get("id"),
+        "merge_target_title": (hit or {}).get("title"),
+        "near_match_item_id": (near or {}).get("id"),
+        "cluster_terms": cluster_terms, "siblings": siblings,
+        "related_items": related[:5], "draft": draft,
+    }
+
+
+def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_closure):
+    """阶段二落地（单一真源）：把（草稿或原始）内容接入知识网，跑完整六阶段系统事件。
 
     管线（对照「文件移动」式旧孵化）：
       ① 冗余闸门：先 kb.query 判命中，命中则【增量合并】原条目（保留 id/双尺定位，
@@ -277,15 +404,12 @@ def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_thresho
          让库自我更新、用户看到 🔔。
       ⑤ 簇血缘：同簇未孵化兄弟标 incubating（联动），血缘写入 hatch_events。
       ⑥ 事件日志：把本次孵化的决策/簇/关联数/反馈数/兄弟数落 hatch_events，
-         供 kb.hatch_stats() 聚合（库可「反思」生长；Skill 可据以校准轴绩点）。
-
-    延迟导入 kb/links/feedback（避免包加载期循环）。"""
+         供 kb.hatch_stats() 聚合（库可「反思」生长；Skill 可据以校准轴绩点）。"""
     sp = get_spark(sid)
     if not sp:
         return {"ok": False, "msg": "碎片不存在"}
     if sp.get("hatched_item_id"):
         return {"ok": False, "msg": "该碎片已孵化", "item_id": sp["hatched_item_id"]}
-    content = sp["content"]
     title = (title or sp.get("title") or "").strip() or content[:20]
     import kb as _kb
     from . import links as _links
@@ -395,3 +519,26 @@ def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_thresho
         "feedback_ids": feedback_ids, "axis_domain": axis_domain,
         "item": (new_item or hit),
     }
+
+
+def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0,
+                draft_only=False):
+    """智能孵化入口。draft_only=True 时只生成碰撞创作草稿（阶段一，不落库）；
+    否则直接落库（兼容旧调用 / 整簇孵化 / Skill）。"""
+    if draft_only:
+        return draft_hatch(sid, title, axis_domain, run_closure, hit_threshold)
+    sp = get_spark(sid)
+    if not sp:
+        return {"ok": False, "msg": "碎片不存在"}
+    if sp.get("hatched_item_id"):
+        return {"ok": False, "msg": "该碎片已孵化", "item_id": sp["hatched_item_id"]}
+    return _commit_hatch_core(sid, sp["content"], title, axis_domain, hit_threshold,
+                              run_closure)
+
+
+def commit_hatch(sid, content, title=None, axis_domain=None, hit_threshold=4.0):
+    """阶段二：用户微调草稿后确认入库。content 为用户编辑后的正文（必填）。"""
+    content = (content or "").strip()
+    if not content:
+        return {"ok": False, "msg": "草稿内容不能为空"}
+    return _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, True)

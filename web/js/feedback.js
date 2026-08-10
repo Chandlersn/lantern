@@ -143,8 +143,9 @@ function expandFbToast(el, it, clearAuto){
     `<div class="fb-acts">` +
       (it.item_id ? `<button class="soft" data-act="open">查看原文</button>` : "") +
       (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "") +
-      (it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "") +
+      (it.item_id && it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "") +
       (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "") +
+      (!it.item_id ? `<span class="fb-hint muted">此提示针对「条目对关系」，无单篇可应用更新</span>` : "") +
     `</div>`;
   // 展开即视为已读（看过内容 = 读过了），同步徽标
   if(it.status === "unread"){ api("/api/feedback/read", { id: it.id }).catch(()=>{}); it.status = "read"; refreshFeedback(false); }
@@ -281,9 +282,10 @@ function fbCard(it){
     + `<div class="fb-acts">`
     + (it.item_id ? `<button class="soft" data-act="open">查看原文</button>` : "")
     + (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "")
-    + (it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "")
+    + (it.item_id && it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "")
     + (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "")
     + `<button class="soft danger" data-act="delete">删除</button>`
+    + (!it.item_id ? `<div class="fb-hint muted">此提示针对「条目对关系」，无单篇可应用更新</div>` : "")
     + `</div></div>`;
 }
 

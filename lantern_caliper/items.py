@@ -415,6 +415,16 @@ def delete_item(item_id, backup=False):
                 f"DELETE FROM {table} WHERE {where}", args).rowcount
         except sqlite3.Error:
             removed[table] = 0                     # 表不存在或无该列，跳过
+    # 级联：把 feedback_inbox 中挂在该条目上的反馈软标为「已忽略」。
+    # 条目已删，这类反馈再也无法「应用更新」（否则会报「关联文章不存在」）；
+    # 软标而非物理删，保留决策痕迹。near_duplicate 等条目对类反馈 item_id=0，不受影响。
+    try:
+        removed["feedback_inbox"] = con.execute(
+            "UPDATE feedback_inbox SET status='dismissed' "
+            "WHERE item_id=? AND status NOT IN ('applied','dismissed')",
+            (item_id,)).rowcount
+    except sqlite3.Error:
+        removed["feedback_inbox"] = 0
     removed["items"] = con.execute("DELETE FROM items WHERE id=?",
                                    (item_id,)).rowcount
     con.commit()
