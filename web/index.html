@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>灯笼 · 知识库</title>
+<link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+<div class="app">
+  <!-- ============== 侧边栏 ============== -->
+  <aside class="sidebar">
+    <div class="brand">灯笼 · 知识库</div>
+    <div class="brand-sub">帮你把知识分门别类、自动找关联</div>
+    <div class="frame">
+      <div class="t">说明</div>
+      <div class="s">这个知识库主要是给<b>智能助手</b>用的。你在这里负责添加内容、查看结果，具体怎么使用由助手来完成。</div>
+    </div>
+    <nav id="nav">
+      <a data-view="overview" class="active">总览<span class="badge ghost" id="navTotal">0</span></a>
+      <a data-view="knowledge">知识库<span class="badge ghost" id="navItems">0</span></a>
+      <a data-view="reader">阅读</a>
+      <a data-view="visualize">逻辑偏差</a>
+      <a data-view="graph">知识图谱<span class="badge" id="navEdges">0</span></a>
+      <a data-view="model">设置</a>
+    </nav>
+    <div class="side-foot">数据保存在本地 · 不联网也能用</div>
+  </aside>
+
+  <!-- ============== 内容区 ============== -->
+  <main class="content">
+    <header class="topbar">
+      <div class="crumb"><span id="viewTitle">总览</span><span class="en" id="viewEn">Overview</span></div>
+      <div class="status">
+        <span class="pill" id="modePill">简单规则</span>
+        <span class="pill" id="rPill">关联度 —</span>
+        <span class="pill" id="cntPill">知识 0 条</span>
+        <button id="fbBell" class="ghost fb-bell" title="反馈邮箱 · 点击查看全部反馈">反馈<span class="badge" id="fbBadge" style="display:none;"></span></button>
+      </div>
+    </header>
+
+    <div class="panes">
+      <!-- ========== 总览 ========== -->
+      <section id="view-overview" class="view active">
+        <div class="grid3" id="stats"></div>
+        <div class="note" id="sumBackend" style="margin-top:10px;"></div>
+        <div class="note" id="sigGuard" style="margin-top:8px;"></div>
+        <div class="grid2" style="margin-top:18px;">
+          <div class="card">
+            <h3>需要你关注的 <span class="muted" id="ovWarnCount"></span></h3>
+            <p class="desc">还没有和其他知识连上的条目，点一下直接打开看。</p>
+            <div id="ovWarn"></div>
+          </div>
+          <div class="card">
+            <h3>知识分布 <span class="muted" id="ovBandCount"></span></h3>
+            <p class="desc">各领域各有多少条，一眼看清库的构成。</p>
+            <div id="ovBands"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== 知识库 ========== -->
+      <section id="view-knowledge" class="view">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <h2>录入新知识</h2>
+            <div class="row" style="gap:8px;align-items:center;">
+              <button class="soft" id="btnImpFolder" title="选一个本地文件夹，把里面的 .md/.txt 一次导入">从文件夹导入</button>
+              <span class="muted" id="impPick" style="font-size:11px;"></span>
+            </div>
+          </div>
+          <input type="file" id="impFiles" webkitdirectory multiple style="display:none;">
+          <p class="desc">提交后系统会自动归类、测严密度、标出可能的相关内容。</p>
+          <label>标题（可选，不填就取开头几个字）</label>
+          <input id="nTitle" type="text" placeholder="如：哥德尔不完备定理">
+          <label>正文</label>
+          <textarea id="nBody" placeholder="写下一段知识、观点，或一段读书笔记……"></textarea>
+          <label style="margin-top:10px;">更细的领域（可选，点一下选，来自多维轴分类）</label>
+          <div id="axisChips" class="chips" style="margin-top:4px;"></div>
+          <div class="muted" style="font-size:11.5px;margin-top:6px;">想在正文里关联别的知识，用 <code>[[另一篇的标题]]</code> 括起来即可自动连上。</div>
+          <div class="row end" style="margin-top:8px;">
+            <button class="soft" id="btnReset">清空全部内容</button>
+            <button id="btnAdd">保存这条知识</button>
+          </div>
+          <div id="impOut" style="margin-top:8px;"></div>
+        </div>
+        <div class="card">
+          <h2>知识条目 <span class="muted" id="kbCount"></span></h2>
+          <p class="desc">点任意一行可打开阅读，也能在里面修改。</p>
+          <table id="kbTable">
+            <thead><tr><th>标题</th><th>领域</th><th>位置</th><th>严密度</th><th>偏差</th><th></th></tr></thead>
+            <tbody id="kbBody"></tbody>
+          </table>
+          <div id="kbPager" class="pager"></div>
+        </div>
+      </section>
+
+      <!-- ========== 阅读（存与看协同） ========== -->
+      <section id="view-reader" class="view">
+        <div class="card">
+          <div class="row" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <h2 id="rdTitle">—</h2>
+            <div class="row" style="gap:8px;">
+              <button class="soft" id="btnRdMode">切换到编辑</button>
+              <button class="soft" id="btnRdLocate">看偏差</button>
+              <button class="soft" id="btnRdReload">从文件重新载入</button>
+              <button class="soft" id="btnRdCopy">打开本地文件位置</button>
+            </div>
+          </div>
+          <div id="rdChips" class="chips"></div>
+          <p class="desc" id="rdPath"></p>
+          <!-- 预览模式（默认）：只读展示 -->
+          <div id="rdPreview" class="rd-preview"></div>
+          <p class="rd-hint" id="rdHint">预览模式：双击正文，或点右上「切换到编辑」即可修改。</p>
+          <!-- 编辑模式：标题 + 正文 + 保存/取消 -->
+          <div id="rdEdit" style="display:none;">
+            <label>标题</label>
+            <input id="rdTitleEdit" type="text">
+            <label>正文</label>
+            <textarea id="rdBody" style="min-height:280px;"></textarea>
+            <div class="row end" style="margin-top:8px;gap:8px;">
+              <button class="soft" id="btnRdCancel">取消</button>
+              <button id="btnRdSave">保存修改</button>
+            </div>
+          </div>
+        </div>
+        <div class="note">这条知识同时存在于本地数据库和 <code>articles/&lt;编号&gt;.md</code> 文件，两边改了都能同步。</div>
+        <div class="card">
+          <h2>关联</h2>
+          <p class="desc">「引用 / 被引用」只统计你正文里手写的 <code>[[...]]</code> 双链，是有事实依据的硬关系；下面的「相邻知识」由智能助手按内容自动发现（跨主题桥接 / 共现）。语义相似因嵌入暂不可信已暂停生成，仅供参考、点开看依据，<b>不代表真有引用关系</b>。</p>
+          <div id="rdTags" style="margin-bottom:8px;"></div>
+          <div id="rdLinks" style="margin-bottom:8px;"></div>
+          <label style="font-size:11px;">相邻知识 · 引擎自动发现（相似 / 桥接 / 共现，仅供参考，点开看依据，点条目跳阅读页）</label>
+          <div id="rdRelated"></div>
+        </div>
+      </section>
+
+      <!-- ========== 查找（已并入知识图谱右下角搜索框，点击弹窗） ========== -->
+
+      <!-- ========== 定位查看 ========== -->
+      <section id="view-visualize" class="view">
+        <div class="card">
+          <h2>两项判断</h2>
+          <div class="row" style="margin-bottom:6px;">
+            <div id="vSel" class="viz-picker">
+              <input id="vFilter" class="viz-filter" type="text" placeholder="筛选条目（标题 / 领域）…" autocomplete="off" />
+              <div id="vList" class="viz-list"></div>
+            </div>
+          </div>
+          <div id="vBeams"></div>
+          <div class="kv" id="vReadout"></div>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="row" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;">
+            <div style="max-width:560px;">
+              <h2>偏差地图</h2>
+              <p class="desc">横轴是领域、纵轴是形式化读数；点偏离「主尺递增趋势线」（灰色虚线）越远，这篇的论证风格越不常规。红色虚线直接标出该点相对趋势线的偏差，从趋势线向上或向下引出到具体点，不会穿过趋势线。</p>
+            </div>
+            <div class="row" style="gap:6px;">
+              <button class="chip active" data-map="near">邻近的</button>
+              <button class="chip" data-map="band">同领域</button>
+            </div>
+          </div>
+          <div id="vMap"></div>
+        </div>
+      </section>
+
+      <!-- ========== 知识关联 ========== -->
+      <section id="view-graph" class="view">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="row" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px;">
+            <div style="max-width:580px;">
+              <h2>知识图谱</h2>
+              <p class="desc">默认铺节点、隐藏连线；点节点展开关联并聚焦局部，双击打开阅读页。概念不进图谱，其关联作为后端桥接推荐，在文章节点详情页显示。</p>
+            </div>
+            <div class="row graph-toolbar" id="gChips">
+              <button class="chip active" data-f="all">全部</button>
+              <button class="chip ghost" id="btnRelayout">重新布局</button>
+              <button class="chip ghost" id="btnConsolidate" title="把近义碎片领域并回正确的上位领域">整理领域</button>
+            </div>
+          </div>
+        </div>
+        <div class="graph-layout">
+          <div class="card graph-legend-card">
+            <h3>图例</h3>
+            <div class="graph-legend">
+              <div id="gLegendDomains"></div>
+              <div class="lg"><span class="ln" style="border-top-color:#3A5A8C"></span>互链（你写的，实线）</div>
+              <div class="lg"><span class="ln" style="border-top-color:#2f6b34"></span>引擎发现（共现，绿实线，自动接入）</div>
+              <div class="lg"><span class="ln dash" style="border-top-color:#9a968c"></span>引擎推测·存疑（语义相似，灰细点线，嵌入暂不可信、已暂停生成）</div>
+              <div class="lg"><span class="ln dash" style="border-top-color:#B5482F"></span>引擎桥接（跨主题，朱砂虚线，自动接入）</div>
+              <div class="lg"><span class="ln dash" style="border-top-color:#bdb6a6"></span>待补写（提到了但还没写）</div>
+              <div class="lg" style="color:var(--stone)">圆点越大 = 连接越多</div>
+            </div>
+          </div>
+          <div class="graph-canvas" id="gCanvas">
+            <svg id="gSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+            <div class="g-tip hidden" id="gTip"></div>
+            <div class="g-hint">滚轮缩放 · 拖空白处平移 · 拖节点移动 · 单击看详情 · 双击打开阅读</div>
+            <aside class="graph-inspector" id="gInspector" aria-label="节点详情" aria-hidden="true">
+              <div class="graph-inspector__head">
+                <div>
+                  <span class="graph-inspector__kicker">NODE FOCUS</span>
+                  <h3>节点详情</h3>
+                </div>
+                <button class="graph-inspector__close" id="gInspectorClose" title="收起" type="button">✕</button>
+              </div>
+              <div class="graph-inspector__body" id="gDetail"><div class="note">连线默认隐藏。点一个节点即可展开它的关联连线并查看详情；双击节点直接打开阅读页。</div></div>
+            </aside>
+          </div>
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="row" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;">
+            <div style="max-width:720px;">
+              <div class="row" style="align-items:center;gap:10px;">
+                <h2 style="margin:0;">自动核对记录</h2>
+                <button class="chip ghost" id="btnAutoLogNow" title="立刻跑一次全库关联核对">立即核对</button>
+              </div>
+              <p class="desc">写入 / 编辑后自动扫描关联，每天三时段独立核对，新联系与近重复留在此处。时间线合并引擎核对与系统消息。</p>
+            </div>
+            <button class="chip ghost" id="gLogPurge" title="日志与缓存占用"><span class="sz">--</span><span class="cl">清理</span></button>
+          </div>
+          <div id="gLog" class="log"></div>
+        </div>
+      </section>
+
+      <!-- ========== 设置 ========== -->
+      <section id="view-model" class="view">
+        <div class="grid2">
+          <div class="card">
+            <h2>判断方式</h2>
+            <p class="desc">系统可以用简单规则，也可以调用真实的大模型来判断。切换会重新评估所有内容。</p>
+            <div id="mMode"></div>
+            <div class="row" style="margin-top:12px;">
+              <button id="btnLLM">改用智能模型</button>
+              <button id="btnHeu" class="ghost">改回简单规则</button>
+            </div>
+            <div class="note" id="mNote"></div>
+            <div class="row" style="margin-top:14px;">
+              <button class="soft" id="btnReset2">清空全部内容</button>
+            </div>
+            <div class="row" style="margin-top:10px;">
+              <button class="soft" id="btnEmbRebuild">用模型重新生成语义向量</button>
+            </div>
+            <div class="note">「按意思找」和「该连未连」的质量取决于向量。当前接入的模型若没有 embedding 接口会自动回退本地向量；接入支持 embedding 的模型后，点这个按钮一键升级为真实语义向量。</div>
+          </div>
+          <div class="card">
+            <h2>两项判断独立性检查</h2>
+            <div id="mGuard" class="guard g-healthy">检测中…</div>
+            <div class="kv" id="mFamilies" style="margin-top:10px;"></div>
+            <div class="note">关联度越低越好：低于 0.6 健康，高于 0.85 受损。</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>模型配置</h2>
+          <p class="desc">接入真实大模型后，「判断方式」才能切到智能模型。这里可自定义 API 端点、密钥与模型名，保存后立即生效，无需重启。</p>
+          <div class="grid2" style="gap:14px;">
+            <div>
+              <label>API 端点</label>
+              <input id="cfgBase" type="text" placeholder="https://api.openai.com/v1" />
+              <div class="hint">OpenAI 兼容的 /chat/completions 与 /embeddings 基地址</div>
+            </div>
+            <div>
+              <label>模型名称</label>
+              <input id="cfgModel" type="text" placeholder="gpt-4o-mini" />
+              <div class="hint">对话模型名（部分端点也用于 embedding）</div>
+            </div>
+          </div>
+          <label>API 密钥</label>
+          <input id="cfgKey" type="password" placeholder="sk-... 留空表示不修改" autocomplete="new-password" />
+          <div class="hint">密钥仅保存在本机 llm_config.json，不对外发送；留空则保留已配置的密钥。</div>
+          <div class="row" style="margin-top:14px;">
+            <button id="btnCfgTest">测试连接</button>
+            <button id="btnCfgSave" class="ghost">保存配置</button>
+            <span id="cfgStatus" class="pill" style="display:none;"></span>
+          </div>
+          <div class="note" id="cfgNote"></div>
+        </div>
+
+        <div class="card">
+          <h2>看看系统分别看到了什么</h2>
+          <p class="desc">贴一段文字，看看系统分别从两个角度看到了什么。</p>
+          <textarea id="isoText" placeholder="因为人皆会死，所以苏格拉底会死；若甲是乙则丙，综上推论其必然成立"></textarea>
+          <div class="row end" style="margin-top:8px;"><button id="btnIso">切分</button></div>
+          <div id="isoOut" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="card">
+          <details>
+            <summary>给智能助手用的接口（点开查看）</summary>
+            <p class="desc">同一套能力也开放给智能助手直接调用（网页接口与标准协议两种方式）。详见 INTERFACE.md。</p>
+            <div class="grid2">
+              <div>
+                <h3>网页接口 · /api/kb/*</h3>
+                <div class="kv">
+                  <div><code>POST /api/kb/add</code> 保存并判断</div>
+                  <div><code>POST /api/kb/query</code> 按关键词找</div>
+                  <div><code>POST /api/kb/neighbors</code> 找相似内容</div>
+                  <div><code>POST /api/kb/search</code> 按领域筛选</div>
+                  <div><code>POST /api/kb/position</code> 只判断不保存</div>
+                  <div><code>POST /api/kb/relate</code> 关联图</div>
+                  <div><code>POST /api/kb/context</code> 资料包</div>
+                  <div><code>POST /api/kb/traverse</code> 关联漫游</div>
+                  <div><code>GET  /api/kb/schema</code> 当前设置</div>
+                  <div><code>GET  /api/kb/state</code> 总览</div>
+                  <div><code>GET  /api/kb/edges</code> 可能的关联</div>
+                  <div><code>POST /api/kb/calibrate</code> 自动核对</div>
+                  <div><code>POST /api/kb/mode</code> 切换判断方式</div>
+                  <div><code>GET  /api/kb/backlinks</code> 谁引用了它</div>
+                  <div><code>GET  /api/kb/similar</code> 按意思找（向量）</div>
+                  <div><code>GET  /api/kb/axes</code> 细分领域表</div>
+                  <div><code>POST /api/kb/link</code> · <code>/api/kb/unlink</code> 手动互链</div>
+                  <div><code>POST /api/kb/import_axes</code> 导入方向表</div>
+                  <div><code>GET  /api/kb/suggest_links</code> 该连未连候选</div>
+                  <div><code>POST /api/kb/delete</code> 删除条目（自动备份）</div>
+                  <div><code>POST /api/kb/backup</code> · <code>GET /api/kb/backups</code> 快照</div>
+                </div>
+              </div>
+              <div>
+                <h3>智能助手接口 · lantern-kb</h3>
+                <div class="kv">
+                  <div><code>kb_add</code> · <code>kb_query</code> · <code>kb_neighbors</code></div>
+                  <div><code>kb_search</code> · <code>kb_edges</code> · <code>kb_position</code></div>
+                  <div><code>kb_relate</code> · <code>kb_context</code> · <code>kb_traverse</code></div>
+                  <div><code>kb_schema</code> · <code>kb_calibrate</code> · <code>kb_state</code> · <code>kb_mode</code></div>
+                  <div><code>kb_article</code> · <code>kb_update</code> · <code>kb_reload</code>（本地文件协同：取全文 / 改写保存 / 从文件重载）</div>
+                  <div><code>kb_backlinks</code> · <code>kb_link</code> · <code>kb_similar</code> · <code>kb_axes</code> · <code>kb_import_axes</code>（互链 / 按意思找 / 细分方向）</div>
+                  <div><code>kb_suggest_links</code> · <code>kb_delete</code> · <code>kb_backup</code>（该连未连 / 删除 / 快照）</div>
+                  <div class="note" style="margin-top:8px;">已在 ~/.workbuddy/mcp.json 注册；连接器管理页信任后，智能助手可直接调用。上方「助手能做什么」里演示的就是这 4 个关联处理功能。</div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- ========== 主题弹窗（替代系统原生 alert/confirm，宣纸墨韵风格） ========== -->
+<div id="dlgMask" class="dlg-mask" style="display:none;">
+  <div class="dlg" role="dialog">
+    <div class="dlg-msg" id="dlgMsg"></div>
+    <div class="row end" id="dlgBtns" style="margin-top:14px;gap:8px;"></div>
+  </div>
+</div>
+
+
+<!-- ========== 反馈收件箱（自我对抗审查消息通知） ========== -->
+<div id="fbPanel" class="fb-panel"></div>
+<div id="fbToasts" class="fb-toasts"></div>
+
+<div id="fbApplyModal" class="fb-modal">
+  <div class="fb-modal-box">
+    <div class="fb-modal-h">应用反馈修订 · 请核对差异</div>
+    <div class="fb-diff">
+      <div class="fb-diff-pane">
+        <div class="fb-diff-h">原稿（只读）</div>
+        <textarea id="fbApplyOld" readonly></textarea>
+      </div>
+      <div class="fb-diff-pane">
+        <div class="fb-diff-h">修订稿（可微调后应用）</div>
+        <textarea id="fbApplyNew"></textarea>
+      </div>
+    </div>
+    <div class="fb-modal-acts">
+      <button class="soft" id="fbApplyCancel">取消</button>
+      <button id="fbApplyConfirm">确认应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 全局悬浮搜索按钮（常驻所有视图，贴近主题、不突兀，参考工作台 floating-search） ========== -->
+<button class="floating-search" id="globalSearch" type="button" aria-label="搜索知识库" title="搜索知识库">
+  <span class="mag">⌕</span>
+  <span class="floating-search__txt">搜索知识库</span>
+  <span class="floating-search__kbd" id="searchKbd">⌘K</span>
+</button>
+
+<!-- ========== 搜索弹窗（右侧滑入竖向抽屉，虚化主页，参考工作台） ========== -->
+<div class="search-backdrop" id="searchBackdrop"></div>
+<aside class="search-drawer" id="searchDrawer" role="dialog" aria-modal="true" aria-label="搜索知识库">
+  <div class="search-drawer__head">
+    <div>
+      <span class="search-drawer__kicker">SEARCH</span>
+      <h2>搜索知识库</h2>
+    </div>
+    <button class="search-drawer__close" id="searchClose" title="关闭（Esc）" type="button">✕</button>
+  </div>
+  <div class="search-drawer__tabs" id="searchTabs">
+    <button class="chip active" data-st="find">查找</button>
+    <button class="chip" data-st="tag">按标签</button>
+  </div>
+
+  <div class="search-drawer__body">
+    <!-- 查找：实时搜索（关键词 / 意思 / 段落） -->
+    <div class="stab" data-stab="find">
+      <div class="search-input-row">
+        <span class="mag">⌕</span>
+        <input id="qText" type="text" placeholder="搜索知识库，如：形式系统 不完备" autocomplete="off" />
+        <button class="search-clear" id="qClear" title="清空" type="button" hidden>✕</button>
+      </div>
+      <div class="search-modes" id="qModes">
+        <button class="chip active" data-qm="kw">按关键词</button>
+        <button class="chip" data-qm="sem">按意思找</button>
+        <button class="chip" data-qm="frag">定位到段落</button>
+      </div>
+      <div id="qResults" class="search-results"></div>
+    </div>
+    <!-- 按标签：选标签浏览 -->
+    <div class="stab" data-stab="tag" hidden>
+      <select id="tTag"><option value="">（全部）</option></select>
+      <div id="tResults" class="search-results"></div>
+    </div>
+  </div>
+</aside>
+
+<script src="js/core.js"></script>
+<script src="js/overview.js"></script>
+<script src="js/knowledge.js"></script>
+<script src="js/reader.js"></script>
+<script src="js/search.js"></script>
+<script src="js/visualize.js"></script>
+<script src="js/graph.js"></script>
+<script src="js/model.js"></script>
+<script src="js/render.js"></script>
+<script src="js/actions.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/feedback.js"></script>
+<script src="js/init.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+{
+  "schema": "lantern.caliper.dual-scale",
+  "version": "1.0.0",
+  "title": "灯笼 · 多维轴知识库 · 游标卡尺双尺规范",
+  "description": "把「主尺 × 游标」从隐喻固化为可计算的度量规范。核心承诺：知识的定位不是离散标签，而是两把独立尺子在共享横梁上的连续读数；真正的信息量来自两读数之差（偏移），而非任一单尺。",
+
+  "shared_beam": {
+    "id": "beam.position",
+    "description": "两尺共用的横梁（可比的公共标度）。任何尺子的读数都必须归一到该标度，否则偏移不可比。",
+    "unit": "lantern-degree (ld)",
+    "range": [0, 100],
+    "precision": 0.1,
+    "semantics": "自左向右单调递增。左端=具体/描述性/人文，右端=抽象/形式化/演绎。"
+  },
+
+  "scales": {
+    "main": {
+      "id": "scale.main.domain",
+      "role": "主尺",
+      "yinyang": "阳（感知归类）",
+      "measures": "学科领域划分 —— 这条知识「属于哪一带」",
+      "unit": "ld",
+      "range": [0, 100],
+      "resolution": 25,
+      "kind": "quantized-continuous",
+      "provider": {
+        "id": "lexical-domain-classifier/v1",
+        "signal_family": "topical-lexicon",
+        "note": "生产替换点：领域分类器 / 主题 embedding 最近邻。禁止复用游标的信号族。"
+      },
+      "bands": [
+        { "name": "人文",     "center": 12.5, "typical_vernier": 20, "range": [0, 25],  "order": 1 },
+        { "name": "社会科学", "center": 37.5, "typical_vernier": 45, "range": [25, 50], "order": 2 },
+        { "name": "自然科学", "center": 62.5, "typical_vernier": 60, "range": [50, 75], "order": 3 },
+        { "name": "形式科学", "center": 87.5, "typical_vernier": 90, "range": [75, 100],"order": 4 }
+      ],
+
+      "domain_registry": {
+        "_note": "受控学科域词典：每个主干带内部的细分学科域，按『形式化程度』这一连续维度标注视角差异（intra_band_order 仅作有序呈现，不代表优劣）。typical_vernier 是该学科域的常态推理形态读数，是偏移基准下沉到学科域级的依据。体验/释义与系统/形式各有其价值，卡尺只负责把这种不易一眼看清的区分客观摊开，不下『谁更好』的结论。『时间』是维度而非学科域，不归入任何带，故不在此列。",
+        "哲学":   { "band": "人文",     "intra_band_order": 2, "typical_vernier": 24 },
+        "历史":   { "band": "人文",     "intra_band_order": 1, "typical_vernier": 18 },
+        "伦理":   { "band": "社会科学", "intra_band_order": 1, "typical_vernier": 30 },
+        "心理":   { "band": "社会科学", "intra_band_order": 2, "typical_vernier": 35 },
+        "社会":   { "band": "社会科学", "intra_band_order": 3, "typical_vernier": 38 },
+        "教育":   { "band": "社会科学", "intra_band_order": 4, "typical_vernier": 40 },
+        "激励":   { "band": "社会科学", "intra_band_order": 5, "typical_vernier": 42 },
+        "政治":   { "band": "社会科学", "intra_band_order": 6, "typical_vernier": 44 },
+        "法律":   { "band": "社会科学", "intra_band_order": 7, "typical_vernier": 47 },
+        "经济":   { "band": "社会科学", "intra_band_order": 8, "typical_vernier": 49 },
+        "生物":   { "band": "自然科学", "intra_band_order": 1, "typical_vernier": 55 },
+        "人工智能": { "band": "形式科学", "intra_band_order": 1, "typical_vernier": 85 },
+        "计算机":   { "band": "形式科学", "intra_band_order": 2, "typical_vernier": 92 }
+      },
+      "known_limitation": "领域本身是谱系的、可杂交的（如计算神经科学）。落在带边界的条目应视为低置信主尺读数，此时游标更可信。"
+    },
+
+    "vernier": {
+      "id": "scale.vernier.deduction",
+      "role": "游标",
+      "yinyang": "阴（深层推理）",
+      "measures": "抽象逻辑演绎深度 —— 这条知识「推理形态有多形式化」",
+      "unit": "ld",
+      "range": [0, 100],
+      "resolution": 1,
+      "kind": "continuous",
+      "anchors": [
+        { "at": 0,   "label": "纯描述/叙事" },
+        { "at": 25,  "label": "归纳举证" },
+        { "at": 50,  "label": "条件推断" },
+        { "at": 75,  "label": "结构化论证" },
+        { "at": 100, "label": "形式化证明" }
+      ],
+      "provider": {
+        "id": "formal-structure-extractor/v1",
+        "signal_family": "argumentative-syntax",
+        "note": "只读推理连接词密度与论证句法结构，不读领域词。生产替换点：视觉/结构大模型看版式与论证骨架，或形式化抽取器。"
+      },
+      "known_limitation": "『逻辑是绝对刻度』是哲学立场而非事实。经典逻辑、直觉主义、各学科推理规范并不统一。本尺读数应理解为「本抽取器所操作化的那种逻辑」，仍是模型依赖的。"
+    }
+  },
+
+  "independence_constraint": {
+    "why": "卡尺的全部威力来自两尺读数之差。若两尺读数高度相关，偏移退化为噪声，闭环随即破产。",
+    "rule": "理想情况下 main.provider.signal_family != vernier.provider.signal_family；但本系统当前两尺同源（llm 模式共用同一模型、启发式模式共用同一本地函数），signal_family 仅为 by-design 的语义标签，不保证物理独立。因此独立性只能靠「实证皮尔逊相关 r」持续监测，而非靠结构断言。",
+    "runtime_guard": {
+      "metric": "pearson_r(main_position, vernier_reading)",
+      "healthy": "|r| < 0.6",
+      "warn": "0.6 <= |r| < 0.85  → 偏移信息量下降，亮灯预警，仍允许写入",
+      "fail": "|r| >= 0.85  → 判定两尺坍缩，偏移退化为噪声",
+      "block_at": 0.6,
+      "block_min_samples": 12,
+      "block_policy": "当 |r| >= block_at 且样本数 n >= block_min_samples 时，系统拒绝自动写入/信任新的双尺读数（拉闸），已写入的条目照常保留、仅隔离其偏移；运营者通过 remeasure_all 显式更换 provider 后即为复位手段（该命令绕过拦截）。block_at 调到 0.85 则仅在『坍缩』时才拉闸。",
+      "note": "block_min_samples 防止暖启动阶段样本过少时偶然相关误触发拉闸。"
+    }
+  },
+
+  "offset": {
+    "id": "reading.offset",
+    "formula": "offset = vernier_reading - 基准(typical_vernier)；基准优先取学科域级 typical_vernier，无学科域时回退带级",
+    "unit": "ld",
+    "semantics": "学科域把基准收敛到该域常态推理形态；游标实测是 B，差值即卡尺读数。正偏移=推理形态比该学科域典型更形式化；负偏移=更叙事化。二者均为视角差异的客观读数，不表示内容优劣。",
+    "interpretation": [
+      { "sign": "positive", "meaning": "推理形态比该学科域典型更形式化 —— 跨域逻辑同构候选，或该内容借更严谨的骨架表达" },
+      { "sign": "negative", "meaning": "推理形态比该学科域典型更叙事化 —— 可能是科普、综述，或另一种更发散的表达形态" }
+    ]
+  },
+
+  "collision": {
+    "id": "event.collision",
+    "trigger": "abs(offset) > threshold",
+    "threshold": { "default": 18, "unit": "ld", "tunable_range": [5, 40] },
+    "resolution_paths": [
+      { "path": "cross_link",   "when": "证据不足以推翻原领域", "action": "生成候选跨学科边，喂给知识图谱" },
+      { "path": "reclassify",   "when": "多源证据支持归入目标领域", "action": "修订主尺读数（阴修订）" }
+    ],
+    "note": "碰撞既可能是洞见，也可能是分类错误。闭环的职责就是区分二者，而不是默认其一。"
+  },
+
+  "graph_edge": {
+    "id": "edge.candidate",
+    "purpose": "把卡尺的连续偏移信号，翻译成知识图谱可消费的离散关系 —— 卡尺管发现，图谱管确定。",
+    "fields": {
+      "src_item": "源条目 id",
+      "dst_band": "游标读数最匹配的目标领域",
+      "kind": "logic-isomorphism | under-formalized",
+      "offset": "生成时的偏移读数（作为置信证据）",
+      "status": "candidate | accepted | rejected"
+    },
+    "review": "候选边默认不入正式图谱，需人工或高置信闭环确认后转 accepted。"
+  },
+
+  "closure": {
+    "id": "loop.yinyang",
+    "description": "阳→阴：主尺给出领域归类，游标回报「实测推理形态与该领域典型不符」的差异报告；阴→阳：推理据此修订主尺定位。互缠互生。",
+    "anchor": "每轮修订必须回扣原始条目内容重算，禁止模型间互喂 —— 否则是发散螺旋，不是闭环。",
+    "convergence": {
+      "criterion": "abs(offset) <= threshold",
+      "max_iterations": 12,
+      "on_non_convergence": "标记 unresolved，转人工复核；不得无限迭代"
+    },
+    "cost_control": "重型 provider（视觉/大模型）仅在含视觉内容或首次入库时运行，其余走周期性重校准，不逐条实时调用。"
+  }
+}

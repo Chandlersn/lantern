@@ -1,0 +1,40 @@
+# ============================================================
+# 灯笼 · 多维轴知识库 —— Git 忽略规则
+# 原则：代码与配置入库；个人数据、凭据、运行时产物不入库。
+# ============================================================
+
+# ---- 凭据与密钥（含敏感信息，绝不入库）----
+.env
+llm_config.json
+
+# ---- 本地知识库数据（个人数据，绝不入库）----
+# 真实 lantern.db / articles 由 .gitignore 排除；仓库以「空库 + seed_demo.py」
+# 形式发布，克隆后运行 `python seed_demo.py` 生成合成演示数据。
+lantern.db
+lantern.db-shm
+lantern.db-wal
+lantern.db.backup*
+llm_cache.db
+articles/*.md
+articles/**/*.md
+
+# ---- 运行时 / 日志 ----
+server.log
+__pycache__/
+*.pyc
+*.pyo
+
+# ---- 本地备份与清理暂存（删除文件的中转区，非仓库内容）----
+backups/
+_deleted_*/
+
+# ---- 操作系统 / 编辑器杂项 ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ---- Skill 运行时状态（由 AI 驱动生成，非仓库内容）----
+skills/*/state/*.json
+skills/*/scripts/__pycache__/

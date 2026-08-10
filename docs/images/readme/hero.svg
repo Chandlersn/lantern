@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 380" font-family="'PingFang SC','Microsoft YaHei',sans-serif">
+  <!-- 宣纸墨韵主题：米白底 / 墨黑字 / 朱砂红点缀 -->
+  <rect width="1000" height="380" fill="#faf7f0"/>
+
+  <!-- 标题 -->
+  <text x="60" y="56" font-size="34" font-weight="700" fill="#1f1b16" letter-spacing="2">灯笼 · 多维轴知识库</text>
+  <text x="62" y="86" font-size="15" fill="#6b6256">游标卡尺式双尺度定位：主尺=学科领域（阳），游标=逻辑演绎深度（阴）</text>
+
+  <!-- 横梁（主尺 / 领域带） -->
+  <rect x="60" y="210" width="880" height="40" rx="4" fill="#1f1b16"/>
+  <!-- 四带 -->
+  <rect x="60"  y="210" width="220" height="40" fill="#b5462f" opacity="0.92"/>
+  <rect x="280" y="210" width="220" height="40" fill="#3f7d72" opacity="0.92"/>
+  <rect x="500" y="210" width="220" height="40" fill="#3a5a8c" opacity="0.92"/>
+  <rect x="720" y="210" width="220" height="40" fill="#4a4640" opacity="0.95"/>
+  <text x="170" y="236" font-size="16" fill="#faf7f0" text-anchor="middle">人文</text>
+  <text x="390" y="236" font-size="16" fill="#faf7f0" text-anchor="middle">社会科学</text>
+  <text x="610" y="236" font-size="16" fill="#faf7f0" text-anchor="middle">自然科学</text>
+  <text x="830" y="236" font-size="16" fill="#faf7f0" text-anchor="middle">形式科学</text>
+
+  <!-- 主尺刻度 -->
+  <g stroke="#faf7f0" stroke-width="1.5">
+    <line x1="60"  y1="210" x2="60"  y2="198"/><line x1="280" y1="210" x2="280" y2="198"/>
+    <line x1="500" y1="210" x2="500" y2="198"/><line x1="720" y1="210" x2="720" y2="198"/>
+    <line x1="940" y1="210" x2="940" y2="198"/>
+  </g>
+  <text x="60"  y="190" font-size="12" fill="#6b6256">0</text>
+  <text x="924" y="190" font-size="12" fill="#6b6256">100</text>
+
+  <!-- 游标（阴·更细的刻度滑尺） -->
+  <g>
+    <rect x="470" y="150" width="160" height="22" rx="3" fill="#c8442e"/>
+    <g stroke="#faf7f0" stroke-width="1">
+      <line x1="470" y1="150" x2="470" y2="142"/><line x1="510" y1="150" x2="510" y2="142"/>
+      <line x1="550" y1="150" x2="550" y2="142"/><line x1="590" y1="150" x2="590" y2="142"/>
+      <line x1="630" y1="150" x2="630" y2="142"/>
+    </g>
+    <text x="550" y="145" font-size="12" fill="#faf7f0" text-anchor="middle">游标 · 演绎深度</text>
+  </g>
+
+  <!-- 偏移标记（游标读数 − 领域带典型值） -->
+  <line x1="550" y1="150" x2="550" y2="260" stroke="#c8442e" stroke-width="2.5" stroke-dasharray="4 3"/>
+  <circle cx="550" cy="260" r="5" fill="#c8442e"/>
+  <text x="558" y="278" font-size="12" fill="#c8442e">offset → 碰撞 / 候选边</text>
+
+  <!-- 底部一句话 -->
+  <text x="60" y="330" font-size="14" fill="#6b6256">同一段知识被两把互不互见的尺子度量，偏移触发阴阳闭环，长出跨学科知识图谱。</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" font-family="'PingFang SC','Microsoft YaHei',sans-serif">
+  <rect width="1000" height="560" fill="#faf7f0"/>
+  <text x="60" y="40" font-size="20" font-weight="700" fill="#1f1b16">界面结构示意（非截图）</text>
+
+  <!-- 浏览器外框 -->
+  <rect x="60" y="60" width="880" height="460" rx="8" fill="#ffffff" stroke="#d8d0c2" stroke-width="1.5"/>
+  <!-- 顶栏 -->
+  <rect x="60" y="60" width="880" height="44" rx="8" fill="#1f1b16"/>
+  <rect x="60" y="96" width="880" height="8" fill="#1f1b16"/>
+  <text x="84" y="89" font-size="15" fill="#faf7f0">灯笼</text>
+  <g font-size="13" fill="#cdc6ba">
+    <text x="160" y="89">总览</text><text x="220" y="89">知识库</text>
+    <text x="280" y="89" fill="#f0a08c">游标偏差</text><text x="360" y="89">知识图谱</text>
+    <text x="440" y="89">阅读</text><text x="500" y="89">设置</text>
+  </g>
+
+  <!-- 主区：双尺度散点地图（游标偏差视图） -->
+  <rect x="84" y="124" width="600" height="372" rx="6" fill="#faf7f0" stroke="#e3dccf"/>
+  <text x="104" y="150" font-size="13" fill="#6b6256">双尺度坐标地图：横=主尺(领域) 纵=游标(演绎深度)</text>
+  <!-- 四带竖向分隔 -->
+  <g stroke="#e3dccf" stroke-width="1">
+    <line x1="84"  y1="124" x2="84"  y2="496"/>
+    <line x1="234" y1="124" x2="234" y2="496"/>
+    <line x1="384" y1="124" x2="384" y2="496"/>
+    <line x1="534" y1="124" x2="534" y2="496"/>
+  </g>
+  <g font-size="11" fill="#9a9183">
+    <text x="150" y="488">人文</text><text x="300" y="488">社科</text>
+    <text x="450" y="488">自科</text><text x="600" y="488">形式</text>
+  </g>
+  <!-- 点 -->
+  <g>
+    <circle cx="170" cy="430" r="6" fill="#b5462f"/><circle cx="300" cy="250" r="6" fill="#3f7d72"/>
+    <circle cx="420" cy="200" r="6" fill="#3a5a8c"/><circle cx="600" cy="150" r="6" fill="#4a4640"/>
+    <circle cx="260" cy="320" r="6" fill="#3f7d72"/><circle cx="500" cy="300" r="6" fill="#3a5a8c"/>
+    <!-- 一条候选边 -->
+    <line x1="420" y1="200" x2="500" y2="300" stroke="#c8442e" stroke-width="1.5" stroke-dasharray="4 3"/>
+  </g>
+  <text x="104" y="470" font-size="11" fill="#9a9183">红虚线=引擎发现的跨域候选边（软链）</text>
+
+  <!-- 右侧：反馈邮箱 + 收件箱 -->
+  <rect x="704" y="124" width="212" height="372" rx="6" fill="#ffffff" stroke="#e3dccf"/>
+  <text x="724" y="150" font-size="13" fill="#1f1b16" font-weight="600">反馈邮箱</text>
+  <g font-size="11" fill="#6b6256">
+    <rect x="724" y="162" width="172" height="40" rx="4" fill="#faf7f0" stroke="#e3dccf"/>
+    <text x="734" y="180">· 分类疑似漂移</text>
+    <text x="734" y="196">· 跨域逻辑同构</text>
+    <rect x="724" y="212" width="172" height="40" rx="4" fill="#faf7f0" stroke="#e3dccf"/>
+    <text x="734" y="230">· 未形式化段落</text>
+    <text x="734" y="246">· 自生长草稿建议</text>
+  </g>
+  <text x="724" y="280" font-size="11" fill="#9a9183">QQ 式右下角弹窗逐条推送，</text>
+  <text x="724" y="296" font-size="11" fill="#9a9183">≥3 分钟节流，仅推高含金量。</text>
+
+  <!-- 底部说明 -->
+  <text x="60" y="548" font-size="12" fill="#9a9183">导航六视图 + 双尺度地图 + 反馈邮箱，构成「定义台 / 展示窗」的人类层；Agent 经 REST / MCP / Skill 在运行时消费。</text>
+</svg>
