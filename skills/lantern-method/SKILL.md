@@ -26,8 +26,9 @@ agent_created: true
 2. **投影（B）**：对每个透镜填模板，产出 `projection`。
 3. **冗余检查 + 计分（C）**：逐对检查耦合标记 `high_coupling`，把 B+C 交给引擎 `update-scores`。
 4. **反馈轴（D）**：对综合结论做自我对抗审查，揪薄弱点 / 盲区 / 过度推断，修订回分析。
-5. **信号守卫（前置）**：写回前跑 `enforce-signal-guard`，确认语义信号健康。
-6. **写回 KB（E）**：统一走 `upsert-kb`（命中增量更新 / 未命中新增；反馈轴不进正文，落独立收件箱）。
+5. **写回 KB（E）**：统一走 `upsert-kb`（命中增量更新 / 未命中新增；反馈轴不进正文，落独立收件箱）。
+
+> 语义信号健康由 KB 引擎在写入时守护：写回前可用 `kb_state`（见仓库 AGENTS.md）查看独立性 r 与信号状态；embedding 退化时引擎自动挂起语义链，无需 Skill 侧额外命令。
 
 ---
 
@@ -99,7 +100,7 @@ agent_created: true
 
 若存在 `high_coupling`：**保留**信息量更大的轴，**删除**另一个，最终输出注明"已合并：X 与 Y 耦合，保留 X"。
 
-计分（B、C 交引擎确定性计算，无需手算）：
+计分（B、C 交引擎确定性计算，无需手算）：把步骤 B 的投影整理为 `{"axes":[{"domain","dimension","projection","orthogonal"}]}` 结构传入 `--gen`。
 ```
 python scripts/lantern_method.py update-scores --gen '<步骤B的JSON>' --review '<步骤C的JSON>' --concept '概念名'
 ```
