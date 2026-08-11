@@ -1,22 +1,7 @@
 # -*- coding: utf-8 -*-
 """概念衍生层（后端桥接中间件）：概念抽取、聚合与「概念↔文档」被动列表。"""
 
-import json
-import math
-import os
-import re
-import sqlite3
 import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def _concept_name_ok(name):
     """概念名须是足够实义的字符串：长度 2-8，不含纯虚字。"""
@@ -116,21 +101,6 @@ def enrich_concepts_with_llm(item_id):
     except Exception:                              # noqa: BLE001
         pass
 
-def rebuild_concepts(use_llm=False):
-    """全量重建概念层。默认离线（快、必可用）；use_llm=True 时清表后用 LLM 抽精炼定义。"""
-    con = connect()
-    con.execute("DELETE FROM concept_links")
-    con.execute("DELETE FROM concepts")
-    con.commit(); con.close()
-    if use_llm and LLM_OK and not _llm.breaker_state()["open"]:
-        for it in list_items()["items"]:
-            enrich_concepts_with_llm(it["id"])
-    else:
-        cc = connect()
-        for it in list_items()["items"]:
-            link_concepts_for_item(cc, it["id"], it.get("content", ""), it)
-        cc.commit(); cc.close()
-    return {"ok": True, "concepts": len(list_concepts()), "llm": bool(use_llm)}
 
 def list_concepts():
     """返回所有概念（含坐标、定义、来源文章标题）。"""

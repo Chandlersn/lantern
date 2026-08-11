@@ -209,14 +209,13 @@ async function renderReader(){
       box.innerHTML = ns.map(o=>{
         let tag, basis;
         if(source === 'link'){
-          if(o.provenance === 'semantic'){ tag = '引擎推测·存疑'; basis = '嵌入相似度（暂不可信）'; }
+          if(o.provenance === 'semantic'){ tag = '引擎语义关联'; basis = '嵌入语义相似'; }
           else if(o.provenance === 'bridge'){ tag = '跨主题桥接'; basis = '跨领域共核心概念'; }
           else { tag = '关键词共现'; basis = '正文共同提及的关键词'; }
         } else { tag = '位置相近'; basis = '双尺度定位接近'; }
         // 依据：引擎连线的证据（语义=相似度分数；共现/桥接=共享词），给事实来源，不下"引用"断言。
-        // 语义类：嵌入相似度当前不可信（实测与真实词重叠矛盾），明确标注"仅推测、非事实关联"
         const ev = o.provenance === 'semantic'
-          ? '引擎推测·相似度存疑（嵌入暂不可信，仅供参考，非事实关联）'
+          ? '引擎语义关联（嵌入相似，信号已恢复可信）'
           : ((o.evidence && o.evidence.length) ? o.evidence.join('、') : basis);
         return `<div class="edge clickable" data-id="${o.id}" style="padding:7px 8px;margin:0 -8px;">
           <div style="display:flex;align-items:baseline;gap:6px;">
@@ -231,5 +230,41 @@ async function renderReader(){
     }catch(e){ box.innerHTML = '<span class="muted">暂时找不出相近的。</span>'; }
   };
   renderRdRelated();
+  // ---- 插入互链（手写 [[...]] 双链，催生作者意图硬链/蓝实线） ----
+  $('btnRdLink').onclick = ()=>openRdLinkModal();
+  $('rdLinkClose').onclick = ()=>closeRdLinkModal();
+  $('rdLinkModal').onclick = (e)=>{ if(e.target===$('rdLinkModal')) closeRdLinkModal(); };
 }
+
+// 在光标处插入文本（用于插入 [[标题]] 互链标记）
+function insertAtCursor(el, text){
+  const s = (el.selectionStart != null) ? el.selectionStart : el.value.length;
+  const e = (el.selectionEnd != null) ? el.selectionEnd : el.value.length;
+  el.value = el.value.slice(0, s) + text + el.value.slice(e);
+  el.selectionStart = el.selectionEnd = s + text.length;
+  el.focus();
+}
+// 打开「插入互链」弹窗：列出全部条目（可搜索），选中即在正文光标处插入 [[标题]]
+function openRdLinkModal(){
+  const box = $('rdLinkList');
+  const items = (S.items || []).filter(i => i.id !== curId);
+  const render = (q)=>{
+    q = (q || '').trim().toLowerCase();
+    const list = q ? items.filter(i => (i.title || '').toLowerCase().includes(q)) : items;
+    if(!list.length){ box.innerHTML = '<div class="rd-link-empty muted">没有匹配的条目</div>'; return; }
+    box.innerHTML = list.map(i =>
+      `<div class="rd-link-item" data-title="${esc(i.title)}"><span>${esc(i.title)}</span><span class="muted">${esc(i.band || '')}</span></div>`
+    ).join('');
+    box.querySelectorAll('.rd-link-item').forEach(el=>{
+      el.onclick = ()=>{ insertAtCursor($('rdBody'), `[[${el.dataset.title}]]`); closeRdLinkModal(); };
+    });
+  };
+  render('');
+  const modal = $('rdLinkModal');
+  modal.setAttribute('aria-hidden', 'false');
+  const inp = $('rdLinkSearch');
+  inp.value = ''; inp.oninput = ()=>render(inp.value);
+  setTimeout(()=>inp.focus(), 0);
+}
+function closeRdLinkModal(){ $('rdLinkModal').setAttribute('aria-hidden', 'true'); }
 

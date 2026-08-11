@@ -1,36 +1,13 @@
 # -*- coding: utf-8 -*-
 """本地 Markdown 镜像的读写、归档、重分类，以及用系统文件管理器定位/打开。"""
 
-import json
-import math
 import os
 import re
-import sqlite3
-import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
 import sys
 import subprocess
 import ctypes
 from ctypes import wintypes
-from .core import *
 
-def repair_band_labels():
-    """把 main 读数里被污染的主尺标签（如『技能管理』『善意提醒』）修回 SCHEMA 规范领域带。
-    依据该读数的 value 位置经 canonical_band 映射，确定性、不调模型。返回修复条数。"""
-    con = connect()
-    rows = con.execute("SELECT item_id, value FROM readings WHERE scale='main'").fetchall()
-    n = 0
-    for r in rows:
-        cb = canonical_band(r["value"])
-        con.execute("UPDATE readings SET label=? WHERE item_id=? AND scale='main'",
-                    (cb, r["item_id"]))
-        n += 1
-    con.commit(); con.close()
-    return {"ok": True, "repaired": n}
 
 def ensure_articles_dir():
     os.makedirs(ARTICLES_DIR, exist_ok=True)

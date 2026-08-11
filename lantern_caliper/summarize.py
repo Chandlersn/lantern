@@ -1,22 +1,9 @@
 # -*- coding: utf-8 -*-
 """真实大模型摘要（带熔断与本地兜底）。"""
 
-import json
-import math
-import os
 import re
-import sqlite3
 import time
-import hashlib
 import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def local_summarize(content):
     """离线兜底摘要：取首句做概要，按词频挑标签。不依赖网络，保存必定有结果。"""

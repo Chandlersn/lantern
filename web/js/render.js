@@ -60,66 +60,80 @@ function renderMap(){
   S.bands.forEach((b)=>{ const bx=X(b.x0!=null?b.x0:(b.center-8)); const bw2=X(b.x1!=null?b.x1:(b.center+8))-bx;
     const tint=(Math.floor((b.x0!=null?b.x0:b.center)/25)%2)?'#F3EFE4':'#FCFAF3';
     grid+=`<rect x="${bx.toFixed(1)}" y="${yTop}" width="${bw2.toFixed(1)}" height="${h}" fill="${tint}" opacity=".65"/>`;});
-  // 横轴领域标签：碰撞感知布局。主干带必显（提供谱系上下文）；细分域标签若与已放置标签
-  // 重叠，先缩字（13→10.5），仍重叠则隐藏 —— 解决「软件工程 / 自然科学」相邻中心导致的
-  // 文字重叠。本图本就做「当前内容的同领域与邻近领域偏差分析」，远域/重合域标签自动让位，
-  // 既避免误读，也不丢失主干结构。
-  const xLabels = (()=>{
-    const ls = S.bands
-      .map(b=>({ name:b.name,
-                  center:(b.center!=null?b.center:(b.x0!=null?(b.x0+b.x1)/2:50)),
-                  backbone:!!b.backbone, count:b.count||0 }))
-      .filter(l=>l.center!=null && l.name);
-    // 优先级：主干带 > 细分域条目数多 > 中心靠左
-    ls.sort((a,b)=>(b.backbone-a.backbone)||(b.count-a.count)||(a.center-b.center));
-    const placed=[], out=[]; const FS_N=13, FS_S=10.5, PAD=4;
-    const wOf=(n,fs)=>n.length*fs*0.95+6;       // CJK≈1em 估算宽度
-    for(const l of ls){
-      let fs=FS_N, hidden=false;
-      for(let k=0;k<2;k++){
-        const w=wOf(l.name,fs), lx=X(l.center)-w/2, rx=X(l.center)+w/2;
-        const clash=placed.some(p=>!(rx+PAD<p.lx)&&!(lx-PAD>p.rx));
-        if(!clash){ out.push({...l,fs}); placed.push({lx,rx}); break; }
-        if(k===0) fs=FS_S; else hidden=true;     // 缩字后仍重叠 → 隐藏
-      }
-      // hidden 的细分域：本轮不绘制任何标签，避免重叠误读
-    }
-    return out;
-  })();
-  xLabels.forEach(l=>{ grid+=`<text x="${X(l.center).toFixed(1)}" y="${yBot+22}" font-size="${l.fs}" fill="${l.backbone?'#5F5E5A':'#9a968c'}" text-anchor="middle">${esc(l.name)}</text>`; });
+  // 横轴领域标签：碰撞交给统一的「重叠→当前常显/其余 hover」解析（resolveLabelOverlaps）。
+  // 主干带必显（提供谱系上下文），细分域同样纳入；当前选中项所属领域标签标记为 .on 常显优先。
+  const _ci = cur();
+  const curBand = _ci ? (_ci.disp_band || _ci.band) : null;
+  S.bands
+    .map(b=>({ name:b.name,
+               cx:(b.center!=null?b.center:(b.x0!=null?(b.x0+b.x1)/2:50)),
+               backbone:!!b.backbone }))
+    .filter(l=>l.cx!=null && l.name)
+    .sort((a,b)=>(b.backbone-a.backbone)||(a.cx-b.cx))
+    .forEach(l=>{
+      const on = (l.name===curBand) ? ' on' : '';
+      grid+=`<g class="dlabel${on}">`
+          + `<circle class="hit" cx="${X(l.cx).toFixed(1)}" cy="${(yBot+18).toFixed(1)}" r="14" fill="transparent"/>`
+          + `<text x="${X(l.cx).toFixed(1)}" y="${(yBot+22).toFixed(1)}" font-size="12" fill="${l.backbone?'#5F5E5A':'#9a968c'}" text-anchor="middle">${esc(l.name)}</text>`
+          + `</g>`;
+    });
   [0,25,50,75,100].forEach(v=>{ grid+=`<line x1="${x0}" y1="${Y(v)}" x2="${x1}" y2="${Y(v)}" stroke="#E2DACA" stroke-width="1"/>`;
     grid+=`<text x="${x0-10}" y="${Y(v)+4}" font-size="12" fill="#888780" text-anchor="end">${v}</text>`;});
-  // 主尺「形式化递增趋势线」（斜向上·贯穿全图）：连接 4 主干领域带的中心典型游标，
-  // 直观呈现「人文→形式科学」这条谱系轴（左低右高）。各领域内部仍有逻辑严密差 ——
-  // 由具体条目点在趋势线上下浮动表达，而非被压平成水平线。
+  // 领域基准趋势线（斜向上·贯穿全图）：连接【固定基准曲线】S.baseline_curve 的各
+  // (center, typical_vernier)——该曲线由全注册表（与库内数据无关）按 (主干带, 带内
+  // intra_band_order) 均匀铺开中心后连成，已消除带内倒挂、单调上升。偏差线顶端
+  // （连 Y(it.typical)，即该条目所属学科域的典型游标）正好落在这条固定基线上——
+  // 「从领域基准线开始偏移」语义统一，且成为全谱参照（不受当前库里有没有该域文章影响）。
+  // 主干带仍由顶部领域条带提供谱系上下文。
   let baseLines = '';
-  const bb = (S.bands||[]).filter(b=>b.backbone && b.center!=null).sort((a,b)=>a.center-b.center);
-  if(bb.length>=2){
-    const lineStr = bb.map(b=>`${X(b.center).toFixed(1)},${Y(b.typical_vernier).toFixed(1)}`).join(' ');
+  // 优先用「固定基准曲线」（baseline_curve，过滤 hidden）；不足 2 点回退到数据驱动的
+  // domain_bands；再不足回退主干带——保证背景基准线始终存在、偏差线不悬空。
+  const bc = (S.baseline_curve||[]).filter(d=>!d.hidden && d.center!=null && d.typical_vernier!=null)
+                                   .sort((a,b)=>a.center-b.center);
+  const db = (S.domain_bands||[]).filter(d=>d.center!=null && d.typical_vernier!=null)
+                                .sort((a,b)=>a.center-b.center);
+  const trendSrc = bc.length>=2 ? bc
+              : (db.length>=2 ? db
+              : (S.bands||[]).filter(b=>b.backbone && b.center!=null).sort((a,b)=>a.center-b.center));
+  if(trendSrc.length>=2){
+    const lineStr = trendSrc.map(d=>`${X(d.center).toFixed(1)},${Y(d.typical_vernier).toFixed(1)}`).join(' ');
     baseLines += `<polyline points="${lineStr}" fill="none" stroke="#9a968c" stroke-width="2" stroke-dasharray="7 5" opacity=".92"/>`;
   }
-  // 趋势线插值：给定主尺位置 x(0-100)，返回「主尺递增趋势线」在该 x 处的典型游标读数。
-  // 与上面绘制的灰色趋势线共用同一组 (带中心, typical_vernier) 控制点，
-  // 因此红线的顶端正好落在趋势线上——只会从趋势线向具体点引出，绝不穿过趋势线。
-  function trendAt(x){
-    if(!bb.length) return null;
-    if(bb.length===1) return bb[0].typical_vernier;
-    if(x<=bb[0].center) return bb[0].typical_vernier;
-    if(x>=bb[bb.length-1].center) return bb[bb.length-1].typical_vernier;
-    for(let i=0;i<bb.length-1;i++){
-      const a=bb[i], b=bb[i+1];
+  // 领域基准线插值：给定主尺位置 x(0-100)，返回【画出的灰色基准线】(baseline_curve 过滤
+  // hidden，即上面绘制的趋势线) 在该 x 处的典型游标读数。与灰色基线共用同一组
+  // (center, typical_vernier) 控制点，因此偏差线顶端正好落在基线上——只从基线向具体点
+  // 引出，绝不穿越基线。
+  function baselineValAtX(x){
+    if(!bc.length) return null;
+    if(x<=bc[0].center) return bc[0].typical_vernier;
+    const last=bc[bc.length-1];
+    if(x>=last.center) return last.typical_vernier;
+    for(let i=0;i<bc.length-1;i++){
+      const a=bc[i], b=bc[i+1];
       if(x>=a.center && x<=b.center){
-        const t=(x-a.center)/(b.center-a.center);
+        const t=(x-a.center)/((b.center-a.center)||1);
         return a.typical_vernier + t*(b.typical_vernier-a.typical_vernier);
       }
     }
-    return bb[bb.length-1].typical_vernier;
+    return last.typical_vernier;
   }
-  // 各学科域典型锚点（小圆+标签）——只标位置，不画全宽水平线，避免把领域压平
+  // 全部可见学科域的淡锚点（仅标点、不标字，呈现细化后的基准密度）
+  (S.baseline_curve||[]).filter(d=>!d.hidden && d.center!=null && d.typical_vernier!=null).forEach(d=>{
+    const cx=X(d.center), cy=Y(d.typical_vernier);
+    baseLines += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.4" fill="#bdb8ac" opacity=".7"/>`;
+  });
+  // 有数据的学科域：标圆点（常显，落在基准线上）+「域名 典型值」标签（.dlabel：
+  // 无重叠全显；重叠时当前项所属域常显、其余 hover 浮现）。
+  const _ci2 = cur();
+  const curDom = _ci2 ? (_ci2.axis_domain || '') : '';
   (S.domain_bands||[]).filter(d=>d.count>0 && d.center!=null).forEach(d=>{
     const cx=X(d.center), cy=Y(d.typical_vernier);
     baseLines += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.6" fill="#9a968c"/>`;
-    baseLines += `<text x="${cx.toFixed(1)}" y="${(cy-7).toFixed(1)}" font-size="10.5" fill="#6b685f" text-anchor="middle">${esc(d.name)} ${d.typical_vernier}</text>`;
+    const on = (d.name===curDom) ? ' on' : '';
+    baseLines += `<g class="dlabel${on}">`
+        + `<circle class="hit" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="14" fill="transparent"/>`
+        + `<g class="tip"><text x="${cx.toFixed(1)}" y="${(cy-7).toFixed(1)}" font-size="10.5" fill="#6b685f" text-anchor="middle">${esc(d.name)} ${d.typical_vernier}</text></g>`
+        + `</g>`;
   });
   // 选中的这条永远是焦点，必画；其余按显示模式收窄，避免一多就乱
   const curIt=cur(); let disp=S.items;
@@ -138,16 +152,27 @@ function renderMap(){
   pts0.forEach(o=>{
     const title=(o.it.title||'').slice(0,14);
     const tw=Math.min(title.length*12.5+8, 190);
-    // 红色竖向偏差线（常显）：表达该点相对「主尺递增趋势线」的偏离——
-    // 顶端落在趋势线在该点 x 处的值，从趋势线向上或向下引出到具体点，绝不穿过趋势线。
-    { const tv = trendAt(o.it.main_pos);
-      const topY = tv!=null ? Y(tv) : Y(o.it.typical);
-      pts+=`<line x1="${o.cx.toFixed(1)}" y1="${o.cy.toFixed(1)}" x2="${o.cx.toFixed(1)}" y2="${topY.toFixed(1)}" stroke="#9a968c" stroke-width="1" stroke-dasharray="4 3" opacity=".4"/>`; }
+    // 竖向偏差线：从【画出的领域基准线】上该点的正下方/正上方引出到该点（严格垂直、
+    // 终止于基线，永不穿越）。基准值在各点 x 处对 baseline_curve 线性插值得到，与灰虚线
+    // 同源，故「点在基准上方=offset 正、下方=offset 负」且线段长度严格 == |offset|。
+    const baseVal = baselineValAtX(o.it.main_pos);
+    if(baseVal!=null){
+      const baseY = Y(baseVal);
+      // 偏差线一律虚线：当前选中项→朱砂红稍粗（凸显焦点），其余→淡灰细虚线（背景参照）。
+      // 起点严格落在领域基准线上（baselineValAtX 同源），绝不穿越基线。
+      if(o.sel){
+        pts+=`<line x1="${o.cx.toFixed(1)}" y1="${o.cy.toFixed(1)}" x2="${o.cx.toFixed(1)}" y2="${baseY.toFixed(1)}" stroke="#B5302A" stroke-width="1.8" stroke-dasharray="5 4" opacity=".92"/>`;
+      } else {
+        pts+=`<line x1="${o.cx.toFixed(1)}" y1="${o.cy.toFixed(1)}" x2="${o.cx.toFixed(1)}" y2="${baseY.toFixed(1)}" stroke="#9a968c" stroke-width="1" stroke-dasharray="4 4" opacity=".32"/>`;
+      }
+    }
+    // 偏移量与该竖向线段同源（offset = vernier − 基准线在该点 x 处的值），徽章与线段一致。
+    const off = (baseVal!=null) ? Math.round((o.it.vernier-baseVal)*10)/10 : (o.it.offset||0);
     if(o.sel){
       // 当前选中项：外圈 + 常显名字（唯一常显标签）
       // 以当前点为中心，紧贴点正上/正下，不甩到一侧（避免长标题横在远处、脱离点）
       pts+=`<circle cx="${o.cx.toFixed(1)}" cy="${o.cy.toFixed(1)}" r="15" fill="none" stroke="#23201C" stroke-width="1" opacity=".3"/>`;
-      pts+=`<circle cx="${o.cx.toFixed(1)}" cy="${o.cy.toFixed(1)}" r="9" fill="#5F5E5A" stroke="#23201C" stroke-width="2.5"/>`;
+      pts+=`<circle cx="${o.cx.toFixed(1)}" cy="${o.cy.toFixed(1)}" r="10" fill="#B5302A" stroke="#FFFFFF" stroke-width="2.5"/>`;
       const boxH=22, gap=12;
       let boxY=o.cy-15-gap-boxH;                       // 优先：点正上方
       if(boxY<yTop+2) boxY=o.cy+15+gap;                // 上方空间不足→正下方
@@ -162,7 +187,6 @@ function renderMap(){
       pts+=`<g class="map-dot dim">`;
       pts+=`<circle class="hit" cx="${o.cx.toFixed(1)}" cy="${o.cy.toFixed(1)}" r="14" fill="transparent"/>`;
       pts+=`<circle cx="${o.cx.toFixed(1)}" cy="${o.cy.toFixed(1)}" r="6.5" fill="#5F5E5A"/>`;
-      const off=`偏移 ${o.it.offset>0?'+':''}${o.it.offset}`;
       const boxH=34, gap=10;
       let boxY=o.cy-boxH-gap;                 // 优先：紧贴点正上方（框底距点 gap）
       if(boxY<yTop+2) boxY=o.cy+gap;          // 上方空间不足→紧贴点正下方
@@ -185,9 +209,11 @@ function renderMap(){
     <text x="32" y="${(yTop+yBot)/2}" font-size="13" fill="#5F5E5A" text-anchor="middle" transform="rotate(-90 32 ${(yTop+yBot)/2})">形式化读数</text>
     <text x="${(x0+x1)/2}" y="${lgY}" font-size="13" fill="#5F5E5A" text-anchor="middle">领域</text>
     <g font-size="12" fill="#23201C">
-      <line x1="${x1-330}" y1="${lgY-4}" x2="${x1-296}" y2="${lgY-4}" stroke="#9a968c" stroke-width="2" stroke-dasharray="7 5"/>
-      <text x="${x1-288}" y="${lgY}">主尺递增趋势（斜向上=形式化递增）</text>
-      <circle cx="${x1-30}" cy="${lgY-4}" r="6" fill="#5F5E5A" stroke="#23201C" stroke-width="2"/><text x="${x1-16}" y="${lgY}">当前</text>
+      <line x1="${x1-360}" y1="${lgY-4}" x2="${x1-326}" y2="${lgY-4}" stroke="#9a968c" stroke-width="2" stroke-dasharray="7 5"/>
+      <text x="${x1-318}" y="${lgY}">基准趋势</text>
+      <line x1="${x1-252}" y1="${lgY-4}" x2="${x1-216}" y2="${lgY-4}" stroke="#B5302A" stroke-width="1.8" stroke-dasharray="5 4"/>
+      <text x="${x1-208}" y="${lgY}">偏差</text>
+      <circle cx="${x1-34}" cy="${lgY-4}" r="6" fill="#B5302A" stroke="#FFFFFF" stroke-width="2"/><text x="${x1-20}" y="${lgY}">当前</text>
     </g></svg>`;
   // 后处理：用真实文本包围盒贴合背景框，根治中英文宽度估算误差导致的溢出/错位
   const svg = $('vMap').querySelector('svg');
@@ -210,6 +236,46 @@ function renderMap(){
       rect.setAttribute('width', bw.toFixed(1));
       rect.setAttribute('height', bh.toFixed(1));
     });
+    // 领域标签重叠解析：无重叠→全显；重叠→当前域常显、其余 hover 浮现
+    resolveLabelOverlaps(svg);
+  }
+}
+
+function resolveLabelOverlaps(svg){
+  // 与数据点标签同源思路：把学科域标签（横轴列标签 + 「域名 典型值」标签）按真实
+  // 包围盒做重叠聚类——彼此不重叠的标签全部常显；一旦成簇重叠，则簇内「当前选中项
+  // 所属域」(.on) 强制常显，其余加 .dim（隐藏、hover 才浮现），既不挤作一团也不丢信息。
+  const groups = [...svg.querySelectorAll('g.dlabel')];
+  if(groups.length < 2) return;
+  const PAD = 2;
+  const info = groups.map(g=>{
+    const t = g.querySelector('text');
+    const b = t.getBBox();
+    return {g, x:b.x, y:b.y, w:b.width, h:b.height,
+            current: g.classList.contains('on')};
+  });
+  const n = info.length;
+  const adj = Array.from({length:n}, ()=>[]);
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    const a=info[i], b=info[j];
+    const ox = a.x < b.x+b.w+PAD && b.x < a.x+a.w+PAD;
+    const oy = a.y < b.y+b.h+PAD && b.y < a.y+a.h+PAD;
+    if(ox && oy){ adj[i].push(j); adj[j].push(i); }
+  }
+  const seen = new Array(n).fill(false);
+  for(let i=0;i<n;i++){
+    if(seen[i]) continue;
+    const stack=[i], comp=[];
+    seen[i]=true;
+    while(stack.length){
+      const u=stack.pop(); comp.push(u);
+      for(const v of adj[u]) if(!seen[v]){ seen[v]=true; stack.push(v); }
+    }
+    if(comp.length>1){
+      for(const k of comp){
+        if(!info[k].current) info[k].g.classList.add('dim');
+      }
+    }
   }
 }
 

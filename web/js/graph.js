@@ -147,7 +147,7 @@ function graphPaint(){
     if(ed.kind==='hard'){ col='#3A5A8C'; w=2; }                       // 作者互链（蓝实线）
     else if(ed.kind==='soft'){
       if(ed.provenance==='bridge'){ col='#B5482F'; w=2; dash='stroke-dasharray="7 5"'; }  // 引擎桥接（朱砂虚线，跨主题）
-      else if(ed.provenance==='semantic'){ col='#9a968c'; w=1.6; dash='stroke-dasharray="2 4"'; }  // 引擎推测·存疑（灰细点线，嵌入暂不可信）
+      else if(ed.provenance==='semantic'){ col='#2f6b34'; w=2; }  // 引擎语义关联（绿实线；仅信号 healthy 时写入=引擎确认的关联）
       else { col='#2f6b34'; w=2; }                  // 引擎发现（绿实线，共现自动接入）
     }
     else { col='#bdb6a6'; w=1.6; dash='stroke-dasharray="3 4"'; }     // 待补写（灰虚线）
@@ -208,7 +208,14 @@ function graphBind(){
   cv.addEventListener('pointerup',e=>{
     if(_onOverlay(e)) return;
     if(GV.drag){ const n=GV.drag.node, click=!GV.drag.moved; n.fixed=false; GV.drag=null;
-      if(click){ graphSelectNode(n.id); return; } }
+      if(click){
+        // 双击判定：同一节点 320ms 内两次「未拖动单击」= 双击 → 直接打开阅读页。
+        // 用 pointerup 手动判定，绕开 setPointerCapture 把 dblclick 重定向到 gCanvas 导致监听收不到的问题。
+        const now=performance.now(), last=GV._lastClick;
+        if(last && last.id===n.id && (now-last.t)<320){ GV._lastClick=null; openReader(n.id); return; }
+        GV._lastClick={id:n.id,t:now};
+        graphSelectNode(n.id); return;
+      } }
     // 点空白处（未拖动平移）= 恢复全显示，清掉节点/连线聚焦锁定
     if(panning && !panMoved && (GV.selectedNode||GV.selectedEdge)) graphClearSelection();
     panning=false; panMoved=false; graphPaint();
@@ -216,11 +223,7 @@ function graphBind(){
   cv.addEventListener('pointerleave',()=>{ const t=$('gTip'); if(t) t.classList.add('hidden'); });
   cv.addEventListener('wheel',e=>{ e.preventDefault(); const r=rect(), L=GV.layout, mx=e.clientX-r.left, my=e.clientY-r.top, f=e.deltaY<0?1.12:0.89, nk=Math.max(0.4,Math.min(2.6,L.k*f)); L.tx=mx-(mx-L.tx)*(nk/L.k); L.ty=my-(my-L.ty)*(nk/L.k); L.k=nk; graphPaint(); },{passive:false});
   svg.addEventListener('click',e=>{ const ln=e.target.closest('[data-edge]'); if(ln){ const id=ln.getAttribute('data-edge'); if(id) graphSelectEdge(id); } });
-  // 双击节点 → 直接跳转到对应内容阅读页（工作台：onDoubleClick → onActivate）
-  svg.addEventListener('dblclick',e=>{
-    const w=toWorld(e.clientX,e.clientY), n=nodeAt(w.x,w.y);
-    if(n && n.type==='item'){ openReader(n.id); }
-  });
+  // 双击节点打开阅读页：改用 pointerup 手动判定（见上方），dblclick 因指针捕获会被重定向到 gCanvas 而失效，故不在此绑定。
   const ci=$('gInspectorClose'); if(ci) ci.onclick=()=>graphClearSelection();
 }
 function fmtMD(ts){
@@ -246,12 +249,17 @@ async function graphSelectNode(id){
     };
     graphOpenInspector(); return;
   }
+  // 按「邻居节点」聚合所有入射/出射边并去重——同一篇被多条边（出链+入链、硬链+软链）连到时只列一次，不再重复
   const inc=GV.edges.filter(e=>e.source===id||e.target===id);
-  const neighbors=inc.map(e=>{
-    const other=e.source===id?e.target:e.source; const n2=GV.nodes[other];
-    const dir = e.source===id ? '出链' : '入链';
-    return {other, n2, dir, e};
-  }).filter(x=>x.n2);
+  const byOther=new Map();
+  inc.forEach(e=>{
+    const other=e.source===id?e.target:e.source; const n2=GV.nodes[other]; if(!n2) return;
+    const dir=e.source===id?'out':'in';
+    if(!byOther.has(other)) byOther.set(other,{other,n2,edges:[]});
+    byOther.get(other).edges.push({dir,e});
+  });
+  const neighbors=[...byOther.values()];
+  const localIds=new Set(byOther.keys());   // 本地图谱已覆盖的邻居，供下方「概念桥接」推荐去重
   const detail = (S.items||[]).find(i=>i.id===id);
   const summary = detail&&detail.summary?detail.summary:'';
   const tags=(n.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
@@ -273,14 +281,23 @@ async function graphSelectNode(id){
     + `<div class="det-actions"><button class="soft" id="gOpen">打开阅读</button></div>`;
   if(neighbors.length){
     html += `<div class="det-sub"><span class="mono">LOCAL GRAPH</span><strong>相邻知识</strong><b class="mono det-count">${neighbors.length}</b></div>` + neighbors.map(x=>{
-      const ev=(x.e.kind==='soft'&&x.e.evidence&&x.e.evidence.length)?` · ${(x.e.provenance==='semantic'?'推测·存疑':'共现')}：${x.e.evidence.map(esc).join('、')}`:'';
+      const kinds=new Set(x.edges.map(g=>g.e.kind));
+      const provs=new Set(x.edges.map(g=>g.e.provenance));
+      const dirs =new Set(x.edges.map(g=>g.dir));
+      // 关系标签：优先取最强的一类（作者互链 > 引擎语义/桥接 > 共现）
       let tag, cls='';
-      if(x.e.kind==='hard'){ tag='互链（你写的）'; }
-      else if(x.e.provenance==='semantic'){ tag='引擎推测·存疑'; cls='col'; }
-      else if(x.e.provenance==='bridge'){ tag='桥接（跨主题）'; cls='col'; }
+      if(kinds.has('hard')){ tag='互链（你写的）'; }
+      else if(provs.has('semantic')){ tag='引擎语义关联'; cls='col'; }
+      else if(provs.has('bridge')){ tag='桥接（跨主题）'; cls='col'; }
       else { tag='关键词共现'; cls='col'; }
-      // 方向词（出链/入链）只对硬链有意义；软链是对称关联，硬加方向会误导「谁引用谁」
-      const dirTag = x.e.kind==='hard' ? `${x.dir} ` : '';
+      // 方向：同一篇若既有出链又有入链 → 双向；否则单向（软链对称，方向仅作提示）
+      let dirTag='';
+      if(dirs.has('in')&&dirs.has('out')) dirTag='双向 ';
+      else if(dirs.has('in')) dirTag='入链 ';
+      else if(dirs.has('out')) dirTag='出链 ';
+      // 证据：合并该邻居所有软链证据（最多取 3 条关键词/概念），避免重复罗列
+      const evs=[]; x.edges.forEach(g=>{ if(g.e.kind==='soft'&&g.e.evidence&&g.e.evidence.length) evs.push(...g.e.evidence); });
+      const ev=evs.length?` · ${(provs.has('semantic')?'语义相似':'共现')}：${evs.slice(0,3).map(esc).join('、')}`:'';
       return `<div class="det-card" data-gn="${x.other}"><span class="tag ${cls}">${dirTag}${esc(tag)}</span> <span class="det-card-title">${esc(x.n2.label)}</span>${ev}</div>`;
     }).join('');
   }
@@ -294,7 +311,8 @@ async function graphSelectNode(id){
   (async()=>{
     try{
       const r = await api('/api/kb/concept_neighbors?id='+id);
-      const recs = (r&&r.neighbors)||[];
+      // 去重：剔除已在上方「相邻知识」里出现过的条目（同一篇不该在两处各列一次）
+      const recs = ((r&&r.neighbors)||[]).filter(x=> x.item_id!==id && !localIds.has(x.item_id));
       const box = $('gConceptRec');
       if(!box) return;
       if(!recs.length){ box.outerHTML=''; return; }
@@ -324,14 +342,14 @@ function graphSelectEdge(id){
   let srcTxt, tag;
   if(ed.kind==='hard'){ srcTxt='作者互链（正文 [[...]] 显式引用）'; tag='作者意图'; }
   else if(ed.kind==='unresolved'){ srcTxt='提到了但还没写'; tag='待补写'; }
-  else if(ed.provenance==='semantic'){ srcTxt='引擎推测·相似度存疑（嵌入暂不可信，仅供参考，非事实关联）'; tag='引擎·存疑'; }
+  else if(ed.provenance==='semantic'){ srcTxt='引擎语义关联（嵌入相似度高，信号已恢复可信）'; tag='引擎·语义'; }
   else if(ed.provenance==='bridge'){ srcTxt='跨主题桥接（分属不同学科带，但共享核心概念词，引擎自动发现）'; tag='引擎·桥接'; }
   else { srcTxt='共现（按关键词自动发现）'; tag='引擎·共现'; }
   let html = `<div class="det-title">${esc(a?a.label:'?')} ↔ ${esc(b?b.label:'?')}</div>
     <div class="det-row">来源：<span class="tag ${ed.kind==='hard'?'':'col'}">${tag}</span> ${srcTxt}</div>`;
   if(ed.kind==='soft' && ed.evidence && ed.evidence.length)
     html += ed.provenance==='semantic'
-      ? `<div class="det-row">${ed.evidence.map(esc).join('、')}（嵌入相似度暂不可信，仅作引擎推测，非事实关联）</div>`
+      ? `<div class="det-row">${ed.evidence.map(esc).join('、')}（嵌入语义相似，引擎确认的关联）</div>`
       : `<div class="det-row">共享关键词：${ed.evidence.map(esc).join('、')}</div>`;
   if(ed.kind==='soft')
     html += `<div class="det-row">引擎判定：已自动接入图谱（无需确认）</div>`;

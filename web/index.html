@@ -98,11 +98,7 @@
 
       <!-- ========== 灵感碎片（原料层 · 知识出发点） ========== -->
       <section id="view-sparks" class="view">
-        <div class="sp-vault">
-          <div class="sp-vault-banner">
-            <span class="sp-vault-tag">原料舱 · 与知识库隔离</span>
-            <span class="sp-vault-note">灵感碎片刻意【无坐标】，是知识的出发点，绝不直接混进知识库；只有经「孵化」投影后，才会作为正式条目进入知识库。</span>
-          </div>
+          <div class="sp-vault">
           <div class="card">
             <h2>随手记</h2>
             <p class="desc">把脑子里一闪而过的想法记下来。这里刻意不分类、不定位——它是知识的出发点，投影留给「孵化」。</p>
@@ -154,8 +150,20 @@
             <label>正文</label>
             <textarea id="rdBody" style="min-height:280px;"></textarea>
             <div class="row end" style="margin-top:8px;gap:8px;">
+              <button class="soft" id="btnRdLink" title="在正文光标处插入 [[标题]] 互链">插入互链</button>
               <button class="soft" id="btnRdCancel">取消</button>
               <button id="btnRdSave">保存修改</button>
+            </div>
+          </div>
+          <div id="rdLinkModal" class="rd-link-modal" aria-hidden="true">
+            <div class="rd-link-panel" role="dialog" aria-modal="true" aria-label="插入互链">
+              <div class="rd-link-head">
+                <span>插入互链 · 手写 [[...]] 双链</span>
+                <button class="rd-link-close" id="rdLinkClose" type="button" title="关闭">✕</button>
+              </div>
+              <input id="rdLinkSearch" type="text" placeholder="搜索条目标题…" autocomplete="off">
+              <div id="rdLinkList" class="rd-link-list"></div>
+              <p class="rd-link-hint">选择条目后会在正文光标处插入 [[标题]]；保存即成为作者意图的硬链（图谱蓝实线）。</p>
             </div>
           </div>
         </div>
@@ -189,7 +197,7 @@
           <div class="row" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;">
             <div style="max-width:560px;">
               <h2>偏差地图</h2>
-              <p class="desc">横轴是领域、纵轴是形式化读数；点偏离「主尺递增趋势线」（灰色虚线）越远，这篇的论证风格越不常规。红色虚线直接标出该点相对趋势线的偏差，从趋势线向上或向下引出到具体点，不会穿过趋势线。</p>
+              <p class="desc">横轴是领域、纵轴是形式化读数；点相对「领域基准趋势线」（灰色虚线，连接各学科域典型游标）的上下浮动，表达这篇相对所属学科域典型演绎深度的偏离。偏差线从该点直接连到领域基准线，向上或向下引出，不会穿过基准线。</p>
             </div>
             <div class="row" style="gap:6px;">
               <button class="chip active" data-map="near">邻近的</button>

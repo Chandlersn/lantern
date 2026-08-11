@@ -1,22 +1,8 @@
 # -*- coding: utf-8 -*-
 """双尺度量引擎：主尺（学科领域）× 游标（演绎深度）的读数、带判定与典型值。"""
 
-import json
 import math
-import os
 import re
-import sqlite3
-import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def backbone_of(pos):
     """按主尺位置落回主干学科带；带是范围，不是点。"""
@@ -107,15 +93,6 @@ def _domain_reps(text, top_n=8):
     """从该领域全部内容里挑高频实义代表词（供动态打分与 LLM 提示用）。"""
     return _clean_terms(text, top_n)
 
-def _invent_domain(content):
-    """离线兜底：**不再本地凭关键词硬造细领域名**。
-
-    本地启发式没有能力可靠判断"这是一门学科还是一项技术"，硬造就会冒出
-    「重叠窗口」「语义分块」这种技术词当领域。所以这里一律返回 None，
-    逼上层退回主干学科带（按内容极性落位）；细领域命名交给（已加约束的）
-    真实大模型，或等同类内容积累够了再自然成簇。
-    """
-    return None
 
 def _domain_label(content, doms):
     """综合判定一条内容的领域标签：优先归入够宽的已有领域，否则退主干带。
@@ -287,11 +264,6 @@ def band_of(pos):
                 "count": 0, "reps": []}
     return min(doms, key=lambda d: abs(d["center"] - pos))
 
-def band_by_name(name):
-    for d in list_domains():
-        if d["name"] == name:
-            return d
-    return None
 
 def canonical_band(pos):
     """按 SCHEMA 主尺固定中心把位置映射到 4 个规范领域带之一（人文/社会科学/自然科学/形式科学）。

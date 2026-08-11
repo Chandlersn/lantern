@@ -145,6 +145,7 @@ function expandFbToast(el, it, clearAuto){
       (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "") +
       (it.item_id && it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "") +
       (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "") +
+      (it.review && it.review.type === "near_duplicate" ? `<button class="soft" data-act="notdup">标记非重复</button>` : "") +
       (!it.item_id ? `<span class="fb-hint muted">此提示针对「条目对关系」，无单篇可应用更新</span>` : "") +
     `</div>`;
   // 展开即视为已读（看过内容 = 读过了），同步徽标
@@ -157,6 +158,15 @@ function expandFbToast(el, it, clearAuto){
       if(act==="applied"){ applyFbRevision(it); el.remove(); return; }
       if(act==="read"){ await api("/api/feedback/read",{id:it.id}).catch(()=>{}); el.remove(); refreshFeedback(false); return; }
       if(act==="dismiss"){ await api("/api/feedback/dismiss",{id:it.id}).catch(()=>{}); el.remove(); refreshFeedback(false); return; }
+      if(act==="notdup"){
+        const rv = it.review || {};
+        if(rv.self_id == null || rv.partner_id == null) return;
+        if(confirm("标记为「非重复」？之后不再就这一对提醒。")){
+          await api("/api/feedback/not_duplicate",{a:rv.self_id,b:rv.partner_id}).catch(()=>{});
+          el.remove(); refreshFeedback(false);
+        }
+        return;
+      }
     };
   });
 }
@@ -192,6 +202,7 @@ function renderFbPanel(items){
   let html = `<div class="fb-ph">`;
   html += `<div class="fb-ptitle">反馈邮箱 <span class="muted">${items.length} 条</span></div>`;
   html += `<div class="fb-psub">自我审查反馈 · 集中收件箱（与右下角逐条推送区分开）</div>`;
+  html += `<div class="fb-phbar"><button class="soft danger sm" id="fbClear" title="永久删除全部反馈">清空收件箱</button></div>`;
   if(_fbSignal && _fbSignal.status === "degraded"){
     html += `<div class="fb-sysbar">嵌入信号当前退化：语义相似类反馈已自动暂停弹窗推送，仅存入此处备查，避免误报打扰。待信号恢复后再评估。</div>`;
   }
@@ -207,6 +218,14 @@ function renderFbPanel(items){
 
   const closeBtn = $("fbClose");
   if(closeBtn) closeBtn.onclick = ()=> closeFbPanel();
+
+  const clearBtn = $("fbClear");
+  if(clearBtn) clearBtn.onclick = async ()=>{
+    if(!confirm("确定清空收件箱？全部反馈将被永久删除，此操作不可恢复。")) return;
+    const r = await api("/api/feedback/clear").catch(()=>null);
+    if(r && r.ok){ refreshFeedback(false); }
+    else alert("清空失败");
+  };
 
   const list = $("fbList");
   p.querySelectorAll(".fb-tabs span").forEach(sp=>{
@@ -226,7 +245,7 @@ function renderFbPanel(items){
 // 结构化审查内容（推送展开态与邮箱卡片共用的渲染）
 // 既渲染受控的「反馈轴」字段（FB_FIELDS），也兜底渲染引擎产生的其它字段（如 near_duplicate 的 partner/sim/note），
 // 保证「查看具体内容」永远有东西可看，不依赖某一套固定字段。
-const REVIEW_TYPE_LABEL = { near_duplicate:"近似重复", bridge:"跨主题桥接", redundancy:"冗余", collision:"碰撞", tension:"内部张力" };
+const REVIEW_TYPE_LABEL = { near_duplicate:"近似重复", bridge:"跨主题桥接", redundancy:"冗余", collision:"离域较远", tension:"内部张力" };
 const REVIEW_LABELS = {
   type:"类型", partner:"配对条目", sim:"相似度", note:"说明",
   core_verdict_weakest_support:"核心判断最弱支撑点", strongest_counter:"最强反论据",
@@ -284,6 +303,7 @@ function fbCard(it){
     + (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "")
     + (it.item_id && it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "")
     + (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "")
+    + (it.review && it.review.type === "near_duplicate" ? `<button class="soft" data-act="notdup">标记为非重复</button>` : "")
     + `<button class="soft danger" data-act="delete">删除</button>`
     + (!it.item_id ? `<div class="fb-hint muted">此提示针对「条目对关系」，无单篇可应用更新</div>` : "")
     + `</div></div>`;
@@ -306,6 +326,15 @@ function bindFbCards(items){
           const r = await api("/api/feedback/delete", { id });
           if(r && r.ok){ card.remove(); refreshFeedback(false); }
           else alert("删除失败");
+          return;
+        }
+        if(act==="notdup"){
+          const rv = it.review || {};
+          if(rv.self_id == null || rv.partner_id == null){ alert("缺少条目 ID，无法标记"); return; }
+          if(!confirm("标记为「非重复」？之后健康自检将不再就这一对提醒你。")) return;
+          const r = await api("/api/feedback/not_duplicate", { a: rv.self_id, b: rv.partner_id });
+          if(r && r.ok){ card.remove(); refreshFeedback(false); }
+          else alert("操作失败");
           return;
         }
         const map = { read:"/api/feedback/read", dismiss:"/api/feedback/dismiss" };

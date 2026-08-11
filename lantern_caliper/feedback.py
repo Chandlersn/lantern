@@ -2,21 +2,7 @@
 """自我对抗审查的反馈收件箱：推送可筛、状态机（未读/已读/已采纳/忽略）。"""
 
 import json
-import math
-import os
-import re
-import sqlite3
 import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def push_feedback(item_id, title, axis_domain, review, severity="info", must_revise=0, pushable=None):
     """把一条自我对抗审查反馈写入独立收件箱。返回新行 id。
@@ -48,19 +34,6 @@ def push_feedback(item_id, title, axis_domain, review, severity="info", must_rev
     con.commit(); con.close()
     return fid
 
-def _feedback_pushable(review, severity, signal_ok):
-    """判定一条反馈是否值得打扰用户（推送资格）。
-    设计原则：只有'明显有问题'才推，低质量/疑似误报绝不打扰——否则系统显得蠢。
-      - 语义相似类：依赖嵌入质量。守卫退化（embedding 不可信）时一概不推；
-        守卫正常时也仅高相似(sim>=0.90)且 warn/critical 才推。
-      - 非语义类（事实矛盾/硬规则违反）：不依赖嵌入，warn/critical 即推。"""
-    rtype = (review or {}).get("type", "")
-    sim = (review or {}).get("sim") or 0
-    if rtype in _SEMANTIC_FB_TYPES:
-        if not signal_ok:
-            return False
-        return severity in ("critical", "warn") and sim >= 0.90
-    return severity in ("critical", "warn")
 
 def _row_feedback(r):
     d = dict(r)
@@ -186,4 +159,34 @@ def delete_feedback(fid):
     ok = cur.rowcount > 0
     con.commit(); con.close()
     return ok
+
+
+def clear_feedback():
+    """一键清空收件箱：物理删除全部反馈行（区别于逐条 dismiss 软忽略）。
+    用于用户想一次性甩掉累积的低价值/误报提醒时。返回被删除的行数。"""
+    con = connect()
+    n = con.execute("SELECT COUNT(*) c FROM feedback_inbox").fetchone()["c"]
+    con.execute("DELETE FROM feedback_inbox")
+    con.commit(); con.close()
+    return n
+
+
+def ignore_dupe_pair(a, b):
+    """用户确认某对条目「并非重复」：永久加入忽略集（meta.ignore_dupe_pairs），
+    健康自检检测近似重复时永久跳过这一对，不再弹窗/入库打扰。返回是否成功。"""
+    con = connect()
+    row = con.execute("SELECT v FROM meta WHERE k='ignore_dupe_pairs'").fetchone()
+    pairs = []
+    if row and row["v"]:
+        try:
+            pairs = json.loads(row["v"])
+        except (json.JSONDecodeError, TypeError):
+            pairs = []
+    key = sorted((int(a), int(b)))
+    if key not in pairs:
+        pairs.append(key)
+    con.execute("INSERT OR REPLACE INTO meta(k,v) VALUES('ignore_dupe_pairs',?)",
+                (json.dumps(pairs),))
+    con.commit(); con.close()
+    return True
 

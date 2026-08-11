@@ -2,21 +2,7 @@
 """双尺规范与受控词表：领域带、学科域注册表、axes 分类法（单点真相）。"""
 
 import json
-import math
 import os
-import re
-import sqlite3
-import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def domain_typical_vernier(domain):
     """受控学科域的带内典型游标；非受控域返回 None（调用方回退带级）。"""
@@ -69,15 +55,31 @@ def list_axes():
 def domains_of_axes():
     con = connect()
     rows = con.execute("SELECT DISTINCT domain FROM axes").fetchall()
+    # 维度（如「时间」）是轴向而非学科域，不进入「更细的领域」可选选择器；
+    # 只保留受控学科域（在 registry 中登记了主干带 band 的）。
+    doms = [r["domain"] for r in rows
+            if isinstance(_DOMAIN_REGISTRY.get(r["domain"]), dict)
+            and "band" in _DOMAIN_REGISTRY.get(r["domain"])]
+    # 智能开放：注册表中「可见学科域」全部可选；隐藏域若已有真实内容映射
+    # （items.axis_domain 命中）则一并开放——内容映射到某隐藏域后，它既能在地图
+    # 显示，也能在赋值入口被再次选择。「根据真实内容映射智能开放」在赋值侧落地。
+    reg_visible = [name for name, d in _DOMAIN_REGISTRY.items()
+                   if isinstance(d, dict) and "band" in d and not d.get("hidden")]
+    item_doms = {r[0] for r in con.execute(
+        "SELECT DISTINCT axis_domain FROM items "
+        "WHERE axis_domain IS NOT NULL AND axis_domain != ''")}
+    reg_hidden_used = [name for name, d in _DOMAIN_REGISTRY.items()
+                       if isinstance(d, dict) and "band" in d
+                       and d.get("hidden") and name in item_doms]
     con.close()
-    doms = [r["domain"] for r in rows]
+    allset = list(dict.fromkeys(doms + reg_visible + reg_hidden_used))
     # 按 (主干带 order, 带内 intra_band_order) 递增排序，客观呈现带内视角差异；
-    # 不在 registry 的（如维度『时间』）排最后。绝不按字典序或条数排序。
+    # 维度类（如『时间』）已在上面过滤，不会进入选择器。绝不按字典序或条数排序。
     bb_order = {b["name"]: b.get("order", i + 1) for i, b in enumerate(BACKBONE_BANDS)}
     def keyfn(d):
         reg = _DOMAIN_REGISTRY.get(d)
         if reg:
-            return (bb_order.get(reg["band"], 99), reg["intra_band_order"])
+            return (bb_order.get(reg["band"], 99), reg.get("intra_band_order", 99))
         return (99, 99)
-    return sorted(doms, key=keyfn)
+    return sorted(allset, key=keyfn)
 

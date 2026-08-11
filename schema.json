@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "title": "灯笼 · 多维轴知识库 · 游标卡尺双尺规范",
   "description": "把「主尺 × 游标」从隐喻固化为可计算的度量规范。核心承诺：知识的定位不是离散标签，而是两把独立尺子在共享横梁上的连续读数；真正的信息量来自两读数之差（偏移），而非任一单尺。",
-
   "shared_beam": {
     "id": "beam.position",
     "description": "两尺共用的横梁（可比的公共标度）。任何尺子的读数都必须归一到该标度，否则偏移不可比。",
     "unit": "lantern-degree (ld)",
-    "range": [0, 100],
+    "range": [
+      0,
+      100
+    ],
     "precision": 0.1,
     "semantics": "自左向右单调递增。左端=具体/描述性/人文，右端=抽象/形式化/演绎。"
   },
-
   "scales": {
     "main": {
       "id": "scale.main.domain",
@@ -20,7 +21,10 @@
       "yinyang": "阳（感知归类）",
       "measures": "学科领域划分 —— 这条知识「属于哪一带」",
       "unit": "ld",
-      "range": [0, 100],
+      "range": [
+        0,
+        100
+      ],
       "resolution": 25,
       "kind": "quantized-continuous",
       "provider": {
@@ -29,46 +33,410 @@
         "note": "生产替换点：领域分类器 / 主题 embedding 最近邻。禁止复用游标的信号族。"
       },
       "bands": [
-        { "name": "人文",     "center": 12.5, "typical_vernier": 20, "range": [0, 25],  "order": 1 },
-        { "name": "社会科学", "center": 37.5, "typical_vernier": 45, "range": [25, 50], "order": 2 },
-        { "name": "自然科学", "center": 62.5, "typical_vernier": 60, "range": [50, 75], "order": 3 },
-        { "name": "形式科学", "center": 87.5, "typical_vernier": 90, "range": [75, 100],"order": 4 }
+        {
+          "name": "人文",
+          "center": 12.5,
+          "typical_vernier": 20,
+          "range": [
+            0,
+            25
+          ],
+          "order": 1
+        },
+        {
+          "name": "社会科学",
+          "center": 37.5,
+          "typical_vernier": 44,
+          "range": [
+            25,
+            50
+          ],
+          "order": 2
+        },
+        {
+          "name": "自然科学",
+          "center": 62.5,
+          "typical_vernier": 68,
+          "range": [
+            50,
+            75
+          ],
+          "order": 3
+        },
+        {
+          "name": "形式科学",
+          "center": 87.5,
+          "typical_vernier": 90,
+          "range": [
+            75,
+            100
+          ],
+          "order": 4
+        }
       ],
-
       "domain_registry": {
         "_note": "受控学科域词典：每个主干带内部的细分学科域，按『形式化程度』这一连续维度标注视角差异（intra_band_order 仅作有序呈现，不代表优劣）。typical_vernier 是该学科域的常态推理形态读数，是偏移基准下沉到学科域级的依据。体验/释义与系统/形式各有其价值，卡尺只负责把这种不易一眼看清的区分客观摊开，不下『谁更好』的结论。『时间』是维度而非学科域，不归入任何带，故不在此列。",
-        "哲学":   { "band": "人文",     "intra_band_order": 2, "typical_vernier": 24 },
-        "历史":   { "band": "人文",     "intra_band_order": 1, "typical_vernier": 18 },
-        "伦理":   { "band": "社会科学", "intra_band_order": 1, "typical_vernier": 30 },
-        "心理":   { "band": "社会科学", "intra_band_order": 2, "typical_vernier": 35 },
-        "社会":   { "band": "社会科学", "intra_band_order": 3, "typical_vernier": 38 },
-        "教育":   { "band": "社会科学", "intra_band_order": 4, "typical_vernier": 40 },
-        "激励":   { "band": "社会科学", "intra_band_order": 5, "typical_vernier": 42 },
-        "政治":   { "band": "社会科学", "intra_band_order": 6, "typical_vernier": 44 },
-        "法律":   { "band": "社会科学", "intra_band_order": 7, "typical_vernier": 47 },
-        "经济":   { "band": "社会科学", "intra_band_order": 8, "typical_vernier": 49 },
-        "生物":   { "band": "自然科学", "intra_band_order": 1, "typical_vernier": 55 },
-        "人工智能": { "band": "形式科学", "intra_band_order": 1, "typical_vernier": 85 },
-        "计算机":   { "band": "形式科学", "intra_band_order": 2, "typical_vernier": 92 }
+        "_meta": {
+          "axis": "形式化程度（abstractness / degree of formalization）",
+          "direction": "左=具体/描述性/体验；右=抽象/形式化/演绎。人文(最具体) → 社会科学 → 自然科学 → 形式科学(最形式化)。",
+          "support": "孔德《科学的阶级》数学→天文→物理→化学→生物→社会学（按抽象/基础性递增）；OECD Frascati FOS 2007 将数学与计算机归入自然科学，灯笼将其提至最形式化一极（理论选择，非错误）。",
+          "hidden_policy": "hidden:true 的学科域已登记为坐标，但前端默认不显示在学科域下拉框；供不同用户知识库的多样性内容归结使用，需要时再开放显示。"
+        },
+        "艺术": {
+          "band": "人文",
+          "intra_band_order": 1,
+          "typical_vernier": 12
+        },
+        "文学": {
+          "band": "人文",
+          "intra_band_order": 3,
+          "typical_vernier": 16
+        },
+        "语言": {
+          "band": "人文",
+          "intra_band_order": 6,
+          "typical_vernier": 20
+        },
+        "历史": {
+          "band": "人文",
+          "intra_band_order": 10,
+          "typical_vernier": 24
+        },
+        "宗教": {
+          "band": "人文",
+          "intra_band_order": 8,
+          "typical_vernier": 22
+        },
+        "哲学": {
+          "band": "人文",
+          "intra_band_order": 11,
+          "typical_vernier": 27
+        },
+        "数字人文": {
+          "band": "人文",
+          "intra_band_order": 9,
+          "typical_vernier": 22,
+          "hidden": true
+        },
+        "伦理": {
+          "band": "社会科学",
+          "intra_band_order": 1,
+          "typical_vernier": 30
+        },
+        "心理": {
+          "band": "社会科学",
+          "intra_band_order": 11,
+          "typical_vernier": 47
+        },
+        "社会": {
+          "band": "社会科学",
+          "intra_band_order": 3,
+          "typical_vernier": 40
+        },
+        "人类学": {
+          "band": "社会科学",
+          "intra_band_order": 4,
+          "typical_vernier": 41
+        },
+        "教育": {
+          "band": "社会科学",
+          "intra_band_order": 2,
+          "typical_vernier": 38
+        },
+        "激励": {
+          "band": "社会科学",
+          "intra_band_order": 5,
+          "typical_vernier": 42
+        },
+        "地理": {
+          "band": "社会科学",
+          "intra_band_order": 7,
+          "typical_vernier": 43
+        },
+        "政治": {
+          "band": "社会科学",
+          "intra_band_order": 6,
+          "typical_vernier": 42
+        },
+        "传媒": {
+          "band": "社会科学",
+          "intra_band_order": 8,
+          "typical_vernier": 43
+        },
+        "法律": {
+          "band": "社会科学",
+          "intra_band_order": 10,
+          "typical_vernier": 46
+        },
+        "商业管理": {
+          "band": "社会科学",
+          "intra_band_order": 12,
+          "typical_vernier": 48
+        },
+        "经济": {
+          "band": "社会科学",
+          "intra_band_order": 16,
+          "typical_vernier": 55
+        },
+        "行为经济": {
+          "band": "社会科学",
+          "intra_band_order": 14,
+          "typical_vernier": 53,
+          "hidden": true
+        },
+        "金融科技": {
+          "band": "社会科学",
+          "intra_band_order": 15,
+          "typical_vernier": 54,
+          "hidden": true
+        },
+        "计算社会科学": {
+          "band": "社会科学",
+          "intra_band_order": 13,
+          "typical_vernier": 52,
+          "hidden": true
+        },
+        "智能治理": {
+          "band": "社会科学",
+          "intra_band_order": 9,
+          "typical_vernier": 45,
+          "hidden": true
+        },
+        "生物": {
+          "band": "自然科学",
+          "intra_band_order": 11,
+          "typical_vernier": 70
+        },
+        "农业科学": {
+          "band": "自然科学",
+          "intra_band_order": 1,
+          "typical_vernier": 58
+        },
+        "医学与健康": {
+          "band": "自然科学",
+          "intra_band_order": 5,
+          "typical_vernier": 66
+        },
+        "神经科学": {
+          "band": "自然科学",
+          "intra_band_order": 8,
+          "typical_vernier": 68,
+          "hidden": true
+        },
+        "生物信息学": {
+          "band": "自然科学",
+          "intra_band_order": 10,
+          "typical_vernier": 69,
+          "hidden": true
+        },
+        "化学": {
+          "band": "自然科学",
+          "intra_band_order": 15,
+          "typical_vernier": 83
+        },
+        "系统生物学": {
+          "band": "自然科学",
+          "intra_band_order": 6,
+          "typical_vernier": 67,
+          "hidden": true
+        },
+        "环境科学": {
+          "band": "自然科学",
+          "intra_band_order": 2,
+          "typical_vernier": 62,
+          "hidden": true
+        },
+        "材料科学": {
+          "band": "自然科学",
+          "intra_band_order": 14,
+          "typical_vernier": 80,
+          "hidden": true
+        },
+        "物理": {
+          "band": "自然科学",
+          "intra_band_order": 17,
+          "typical_vernier": 90
+        },
+        "气候科学": {
+          "band": "自然科学",
+          "intra_band_order": 4,
+          "typical_vernier": 65,
+          "hidden": true
+        },
+        "天文": {
+          "band": "自然科学",
+          "intra_band_order": 16,
+          "typical_vernier": 87
+        },
+        "认知科学": {
+          "band": "自然科学",
+          "intra_band_order": 3,
+          "typical_vernier": 64,
+          "hidden": true
+        },
+        "人工智能": {
+          "band": "形式科学",
+          "intra_band_order": 4,
+          "typical_vernier": 86
+        },
+        "工程与技术": {
+          "band": "形式科学",
+          "intra_band_order": 1,
+          "typical_vernier": 84
+        },
+        "计算语言学": {
+          "band": "形式科学",
+          "intra_band_order": 7,
+          "typical_vernier": 87,
+          "hidden": true
+        },
+        "数据科学": {
+          "band": "形式科学",
+          "intra_band_order": 8,
+          "typical_vernier": 87,
+          "hidden": true
+        },
+        "网络科学": {
+          "band": "形式科学",
+          "intra_band_order": 5,
+          "typical_vernier": 86,
+          "hidden": true
+        },
+        "复杂系统": {
+          "band": "形式科学",
+          "intra_band_order": 2,
+          "typical_vernier": 85,
+          "hidden": true
+        },
+        "机器学习": {
+          "band": "形式科学",
+          "intra_band_order": 10,
+          "typical_vernier": 89,
+          "hidden": true
+        },
+        "机器人学": {
+          "band": "形式科学",
+          "intra_band_order": 12,
+          "typical_vernier": 91,
+          "hidden": true
+        },
+        "计算机": {
+          "band": "形式科学",
+          "intra_band_order": 9,
+          "typical_vernier": 88
+        },
+        "量子信息": {
+          "band": "形式科学",
+          "intra_band_order": 14,
+          "typical_vernier": 93,
+          "hidden": true
+        },
+        "数学": {
+          "band": "形式科学",
+          "intra_band_order": 16,
+          "typical_vernier": 98
+        },
+        "统计学": {
+          "band": "形式科学",
+          "typical_vernier": 85,
+          "intra_band_order": 3
+        },
+        "形式逻辑": {
+          "band": "形式科学",
+          "typical_vernier": 96,
+          "intra_band_order": 15
+        },
+        "算法": {
+          "band": "形式科学",
+          "typical_vernier": 90,
+          "intra_band_order": 11
+        },
+        "密码学": {
+          "band": "形式科学",
+          "typical_vernier": 92,
+          "intra_band_order": 13
+        },
+        "运筹学": {
+          "band": "形式科学",
+          "typical_vernier": 86,
+          "intra_band_order": 6
+        },
+        "音乐": {
+          "band": "人文",
+          "typical_vernier": 14,
+          "intra_band_order": 2
+        },
+        "影视艺术": {
+          "band": "人文",
+          "typical_vernier": 17,
+          "intra_band_order": 4
+        },
+        "设计": {
+          "band": "人文",
+          "typical_vernier": 19,
+          "intra_band_order": 5
+        },
+        "修辞学": {
+          "band": "人文",
+          "typical_vernier": 21,
+          "intra_band_order": 7
+        },
+        "地球科学": {
+          "band": "自然科学",
+          "typical_vernier": 72,
+          "intra_band_order": 13
+        },
+        "生态学": {
+          "band": "自然科学",
+          "typical_vernier": 68,
+          "intra_band_order": 9
+        },
+        "遗传学": {
+          "band": "自然科学",
+          "typical_vernier": 71,
+          "intra_band_order": 12
+        },
+        "药学": {
+          "band": "自然科学",
+          "typical_vernier": 67,
+          "intra_band_order": 7
+        }
       },
       "known_limitation": "领域本身是谱系的、可杂交的（如计算神经科学）。落在带边界的条目应视为低置信主尺读数，此时游标更可信。"
     },
-
     "vernier": {
       "id": "scale.vernier.deduction",
       "role": "游标",
       "yinyang": "阴（深层推理）",
       "measures": "抽象逻辑演绎深度 —— 这条知识「推理形态有多形式化」",
       "unit": "ld",
-      "range": [0, 100],
+      "range": [
+        0,
+        100
+      ],
       "resolution": 1,
       "kind": "continuous",
       "anchors": [
-        { "at": 0,   "label": "纯描述/叙事" },
-        { "at": 25,  "label": "归纳举证" },
-        { "at": 50,  "label": "条件推断" },
-        { "at": 75,  "label": "结构化论证" },
-        { "at": 100, "label": "形式化证明" }
+        {
+          "at": 0,
+          "label": "纯描述/叙事"
+        },
+        {
+          "at": 25,
+          "label": "归纳举证"
+        },
+        {
+          "at": 50,
+          "label": "条件推断"
+        },
+        {
+          "at": 75,
+          "label": "结构化论证"
+        },
+        {
+          "at": 100,
+          "label": "形式化证明"
+        }
       ],
       "provider": {
         "id": "formal-structure-extractor/v1",
@@ -78,7 +446,6 @@
       "known_limitation": "『逻辑是绝对刻度』是哲学立场而非事实。经典逻辑、直觉主义、各学科推理规范并不统一。本尺读数应理解为「本抽取器所操作化的那种逻辑」，仍是模型依赖的。"
     }
   },
-
   "independence_constraint": {
     "why": "卡尺的全部威力来自两尺读数之差。若两尺读数高度相关，偏移退化为噪声，闭环随即破产。",
     "rule": "理想情况下 main.provider.signal_family != vernier.provider.signal_family；但本系统当前两尺同源（llm 模式共用同一模型、启发式模式共用同一本地函数），signal_family 仅为 by-design 的语义标签，不保证物理独立。因此独立性只能靠「实证皮尔逊相关 r」持续监测，而非靠结构断言。",
@@ -93,29 +460,49 @@
       "note": "block_min_samples 防止暖启动阶段样本过少时偶然相关误触发拉闸。"
     }
   },
-
   "offset": {
     "id": "reading.offset",
     "formula": "offset = vernier_reading - 基准(typical_vernier)；基准优先取学科域级 typical_vernier，无学科域时回退带级",
     "unit": "ld",
     "semantics": "学科域把基准收敛到该域常态推理形态；游标实测是 B，差值即卡尺读数。正偏移=推理形态比该学科域典型更形式化；负偏移=更叙事化。二者均为视角差异的客观读数，不表示内容优劣。",
     "interpretation": [
-      { "sign": "positive", "meaning": "推理形态比该学科域典型更形式化 —— 跨域逻辑同构候选，或该内容借更严谨的骨架表达" },
-      { "sign": "negative", "meaning": "推理形态比该学科域典型更叙事化 —— 可能是科普、综述，或另一种更发散的表达形态" }
+      {
+        "sign": "positive",
+        "meaning": "推理形态比该学科域典型更形式化 —— 跨域逻辑同构候选，或该内容借更严谨的骨架表达"
+      },
+      {
+        "sign": "negative",
+        "meaning": "推理形态比该学科域典型更叙事化 —— 可能是科普、综述，或另一种更发散的表达形态"
+      }
     ]
   },
-
   "collision": {
     "id": "event.collision",
-    "trigger": "abs(offset) > threshold",
-    "threshold": { "default": 18, "unit": "ld", "tunable_range": [5, 40] },
+    "semantics": "neutral_attention_filter",
+    "trigger": "abs(offset) > threshold（中立的注意力标记：「离域典型较远」，非缺陷判定）",
+    "threshold": {
+      "default": 18,
+      "unit": "ld",
+      "tunable_range": [
+        5,
+        40
+      ],
+      "note": "阈值仅为注意力过滤器：偏移超此值才进入候选关联/提醒流程，便于人工关注；不代表「错误」。当某学科域样本充足（≥4）时可升级为相对该域分布的 MAD，小库下退化回此处全局默认值。"
+    },
     "resolution_paths": [
-      { "path": "cross_link",   "when": "证据不足以推翻原领域", "action": "生成候选跨学科边，喂给知识图谱" },
-      { "path": "reclassify",   "when": "多源证据支持归入目标领域", "action": "修订主尺读数（阴修订）" }
+      {
+        "path": "cross_link",
+        "when": "证据不足以推翻原领域",
+        "action": "生成形式相近关联候选（跨学科），喂给知识图谱"
+      },
+      {
+        "path": "reclassify",
+        "when": "多源证据支持归入目标领域",
+        "action": "修订主尺读数（阴修订）"
+      }
     ],
-    "note": "碰撞既可能是洞见，也可能是分类错误。闭环的职责就是区分二者，而不是默认其一。"
+    "note": "偏移较大既可能是有意义的跨域洞见，也可能是分类偏差。闭环的职责是区分二者，而非默认其一——因此它被设计成中性注意力信号，绝不预先判定为「异常」。"
   },
-
   "graph_edge": {
     "id": "edge.candidate",
     "purpose": "把卡尺的连续偏移信号，翻译成知识图谱可消费的离散关系 —— 卡尺管发现，图谱管确定。",
@@ -128,7 +515,6 @@
     },
     "review": "候选边默认不入正式图谱，需人工或高置信闭环确认后转 accepted。"
   },
-
   "closure": {
     "id": "loop.yinyang",
     "description": "阳→阴：主尺给出领域归类，游标回报「实测推理形态与该领域典型不符」的差异报告；阴→阳：推理据此修订主尺定位。互缠互生。",

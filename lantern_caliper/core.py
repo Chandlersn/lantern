@@ -2,20 +2,13 @@
 """灯笼 · 多维轴知识库 —— 核心持久化层（连接 / 迁移 / 元信息 / 快照 / 阈值与模式 / 调试）。"""
 
 import json
-import math
 import os
 import re
 import sqlite3
 import time
-import hashlib
-import collections
-import binascii
 import concurrent.futures
 import threading
 import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
 
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
@@ -33,20 +26,13 @@ from ctypes import wintypes
 """
 
 import json
-import math
 import os
 import re
 import sqlite3
 import time
-import hashlib
-import collections
-import binascii
 import concurrent.futures
 import threading
 import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE, "lantern.db")
@@ -333,8 +319,72 @@ def _write_readings(con, item_id, content, mode="heuristic", allow_invent=True,
         (item_id, "vernier", depth, None, vconf,
          vprov["id"], vprov["signal_family"], now),
     )
+    _enforce_band_invariant(con, item_id, now)   # 写入路径收口：带域一致不变量
     _invalidate_indep_cache()      # 读数变化后让独立性守卫重算
     return mwhy, vwhy
+
+def _enforce_band_invariant(con, item_id, now=None, silent=False):
+    """带域一致不变量（写入路径收口）：强制 canonical_band(main_pos) == domain_band_name(axis_domain)。
+
+    即以 axis_domain 所属主干带为权威横轴坐标，消除「主尺漂到与学科域冲突的带」这类
+    横向漂移——remeasure_all / _refine 的 LLM 测量、启发式分类都可能把 main_pos 测错位，
+    此函数是长治久安的唯一收口。
+
+    规则（第一性原理，与 reconcile_band_with_domain 一致）：
+    - axis_domain 为空 → 无锚可对齐，跳过（不强制）。
+    - axis_domain 非受控域（如维度『时间』）→ domain_band_name 返回 None，跳过。
+    - 跨带漂移 → 主尺收口到目标带中心（带内相对位置无意义，居中收口最干净）。
+    - 已在正确带但越出带边界（极端读数）→ 夹回带边界，保留带内相对位置。
+    - 正确带内且合规 → 不动。
+    - 只动主尺(main reading)，vernier 原样保留（残留偏移是深度相对学科域典型的真实信号）。
+
+    返回 True 表示发生了收敛修正；修正后自动使独立性缓存失效。
+    """
+    row = con.execute("SELECT axis_domain FROM items WHERE id=?", (item_id,)).fetchone()
+    if not row:
+        return False
+    domain = (row["axis_domain"] or "").strip()
+    if not domain:
+        return False
+    target_band = domain_band_name(domain)
+    if target_band is None:
+        return False                                       # 非受控域：不强制对齐
+    main = con.execute(
+        "SELECT * FROM readings WHERE item_id=? AND scale='main'", (item_id,)
+    ).fetchone()
+    if not main:
+        return False
+    center = lo = hi = None
+    for b in BACKBONE_BANDS:
+        if b["name"] == target_band:
+            center = b["center"]
+            lo, hi = b["range"]
+            break
+    if center is None:
+        return False
+    pos = main["value"]
+    cur_band = canonical_band(pos)
+    if cur_band == target_band and lo <= pos <= hi:
+        return False                                        # 已在正确带内且合规，无需动作
+    if cur_band == target_band:
+        new_pos, why = max(lo, min(hi, pos)), "带内越界，夹回边界"
+    else:
+        new_pos, why = center, "跨带漂移，居中收口"
+    now = now or time.time()
+    con.execute(
+        "INSERT OR REPLACE INTO readings(item_id,scale,value,label,confidence,"
+        "provider,signal_family,revised,computed_at) VALUES(?,?,?,?,?,?,?,1,?)",
+        (item_id, "main", new_pos, target_band,
+         main["confidence"] if main["confidence"] is not None else 0.0,
+         main["provider"] or "invariant",
+         main["signal_family"] or "axis-domain-anchor", now),
+    )
+    if not silent:
+        log(con, item_id, "invariant",
+            f"带域一致不变量：主尺自 {pos}({cur_band}) 收敛至 {new_pos}({target_band})，"
+            f"{why}，与学科域「{domain}」对齐。")
+    _invalidate_indep_cache()
+    return True
 
 def init(force=False):
     """force=True 时用 DROP TABLE 重置（不删文件，兼容受限文件系统）。
@@ -423,6 +473,7 @@ def remeasure_all(mode):
             "INSERT OR REPLACE INTO readings(item_id,scale,value,label,confidence,"
             "provider,signal_family,revised,computed_at) VALUES(?,?,?,?,?,?,?,0,?)",
             (iid, "vernier", depth, None, vconf, vprov["id"], vprov["signal_family"], now))
+        _enforce_band_invariant(con, iid, now)   # 写入路径收口：LLM 重测后横轴仍以学科域为锚
     con.execute("INSERT OR REPLACE INTO meta(k,v) VALUES('mode',?)", (mode,))
     _invalidate_indep_cache()      # 批量重写读数后重算独立性
     label = "真实大模型" if mode == "llm" else "本地启发式"
@@ -501,7 +552,7 @@ def migrate():
       kind TEXT NOT NULL DEFAULT 'hard',   -- hard=[[...]]显式链 | soft=关键词共现
       evidence TEXT,                       -- soft 链：共享关键词 JSON；hard 链为 NULL
       confirmed INTEGER NOT NULL DEFAULT 1, -- soft 链待用户确认前为 0
-      UNIQUE(src_item_id, dst_item_id)
+      UNIQUE(src_item_id, dst_item_id, kind)   -- 同一对可并存 hard(作者意图) 与 soft(引擎发现) 两类边
     );
     CREATE TABLE IF NOT EXISTS axes (
       domain TEXT NOT NULL,
@@ -648,7 +699,7 @@ def _dump(tag):
     d = list_items()
     print(f"\n=== {tag} ===  条目 {len(d['items'])}，阈值 {d['threshold']}")
     for it in d["items"]:
-        flag = "★碰撞" if it["collision"] else "  对齐"
+        flag = "★离域典型较远" if it["collision"] else "  贴近域典型"
         print(f"{flag} {it['title']:<12} 主尺={it['band']}@{it['main_pos']:<6} "
               f"游标={it['vernier']:<6} 典型={it['typical']:<4} 偏移={it['offset']:<7}"
               f"主尺信心={it['main_conf']}")

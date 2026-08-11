@@ -94,16 +94,12 @@ function bindSparkCards(){
   document.querySelectorAll('#spList .sp-view').forEach(b => b.onclick = () => {
     if(typeof openReader === 'function') openReader(parseInt(b.dataset.id, 10));
   });
-  // 双击：原料/孵化中卡片进入内联编辑；已孵化卡片双击打开对应知识条目
+  // 双击：所有灵感碎片卡片都在当前页面就地进入编辑状态（不再跳转阅读页）；
+  // 已孵化碎片想看对应知识条目，用卡片上的「查看条目」按钮。
   document.querySelectorAll('#spList .sp-card').forEach(card => {
     card.ondblclick = () => {
       const id = parseInt(card.dataset.id, 10);
-      if(card.classList.contains('sp-card--hatched')){
-        const itemId = parseInt(card.dataset.item, 10);
-        if(!isNaN(itemId) && typeof openReader === 'function') openReader(itemId);
-      } else {
-        startEdit(id);
-      }
+      if(!isNaN(id)) startEdit(id);
     };
   });
 }
@@ -185,7 +181,11 @@ function startEdit(id){
     } catch(e){ toast('保存失败'); }
     finally { saveBtn.disabled = false; saveBtn.textContent = '保存'; }
   };
-  card.querySelector('.sp-edit-content').focus();
+  const eta = card.querySelector('.sp-edit-content');
+  const autoGrow = () => { eta.style.height = 'auto'; eta.style.height = Math.min(eta.scrollHeight, 560) + 'px'; };
+  eta.addEventListener('input', autoGrow);
+  autoGrow();
+  eta.focus();
 }
 
 // 智能孵化报告：把「决策 / 关联发现 / 自检反馈 / 兄弟联动」摊开给用户看，
@@ -253,6 +253,13 @@ function bindClusterCards(){
 function bindSparkCapture(){
   const btn = $('spSave');
   if(!btn) return;
+  const cap = $('spContent');
+  if(cap){
+    const grow = () => { cap.style.height = 'auto'; cap.style.height = Math.min(Math.max(cap.scrollHeight, 120), 320) + 'px'; };
+    cap.onfocus = grow;
+    cap.oninput = grow;
+    cap.onblur = () => { if(!cap.value.trim()) cap.style.height = ''; };
+  }
   btn.onclick = async () => {
     const content = ($('spContent').value || '').trim();
     if(!content){ alert('先写点什么再记。'); return; }

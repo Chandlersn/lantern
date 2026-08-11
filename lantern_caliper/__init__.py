@@ -10,7 +10,6 @@
 """
 import os
 import sys
-import types
 
 # 让包内模块能 import 仓库根的兄弟模块（llm.py 等）
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -375,6 +375,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json({"ok": store.dismiss_feedback(int(body.get("id")))})
             if p.path == "/api/feedback/delete":
                 return self._json({"ok": store.delete_feedback(int(body.get("id")))})
+            if p.path == "/api/feedback/clear":
+                return self._json({"ok": True, "deleted": store.clear_feedback()})
+            if p.path == "/api/feedback/not_duplicate":
+                a = int(body.get("a")); b = int(body.get("b"))
+                store.ignore_dupe_pair(a, b)
+                return self._json({"ok": True})
             if p.path == "/api/feedback/apply":
                 # 应用更新闭环第 1 步：仅生成修订稿，不落库；前端 diff 预览 + 用户确认后才回写
                 try:

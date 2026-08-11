@@ -3,20 +3,6 @@
 
 import json
 import math
-import os
-import re
-import sqlite3
-import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def detect_health(sim_threshold=0.90):
     """E2 · 健康自检：用高余弦找近重复 / 高耦合条目对（疑似冗余），
@@ -27,9 +13,13 @@ def detect_health(sim_threshold=0.90):
     con = connect()
     vecs = {r["item_id"]: json.loads(r["vec"])
             for r in con.execute("SELECT item_id,vec FROM embeddings")}
-    # 信号守卫：嵌入是否可信。退化时语义相似类反馈不可信，绝不推送（避免假阳性刷屏）
+    # 信号守卫：嵌入是否可信。退化时语义相似类反馈不可信——直接跳过整轮推送，
+    # 既不入库也不弹窗，避免假阳性误报占用收件箱。
     sig = signal_integrity()
     signal_ok = sig.get("status") == "healthy"
+    if not signal_ok:
+        con.close()
+        return {"ok": True, "found": [], "skipped": "signal_degraded"}
     reported = set()
     row = con.execute("SELECT v FROM meta WHERE k='health_reported'").fetchone()
     if row and row["v"]:
@@ -37,6 +27,14 @@ def detect_health(sim_threshold=0.90):
             reported = set(json.loads(row["v"]))
         except (json.JSONDecodeError, TypeError):
             reported = set()
+    # 用户已「标记为非重复」的条目对：健康自检永久跳过，不再打扰
+    ignored = set()
+    irow = con.execute("SELECT v FROM meta WHERE k='ignore_dupe_pairs'").fetchone()
+    if irow and irow["v"]:
+        try:
+            ignored = set(tuple(p) for p in json.loads(irow["v"]))
+        except (json.JSONDecodeError, TypeError):
+            ignored = set()
     con.close()
     ids = [i for i in by_id if i in vecs]
     found = []
@@ -53,28 +51,19 @@ def detect_health(sim_threshold=0.90):
             if sim < sim_threshold:
                 continue
             key = tuple(sorted((a, b)))
-            if key in reported:
+            if key in reported or key in ignored:
                 continue
             reported.add(key)
             found.append({"a": a, "a_title": by_id[a]["title"],
                           "b": b, "b_title": by_id[b]["title"], "sim": round(sim, 3)})
-            note = "两篇语义高度相似，疑似重复或过度耦合；建议合并或明确区分视角。"
-            pushable = _feedback_pushable(
-                {"type": "near_duplicate", "partner": by_id[b]["title"], "sim": round(sim, 3)},
-                "warn", signal_ok)
-            if not pushable:
-                if not signal_ok:
-                    note += ("（当前嵌入信号退化，系统判定此提醒暂不推送，避免误报打扰；"
-                             "待信号恢复、确认确为重复后再评估）")
-                else:
-                    note += "（相似度未达推送门槛，已存入邮箱备查，未弹窗打扰）"
+            note = "两篇语义高度相似，疑似重复或过度耦合；可在条目中合并，或在此标记为非重复。"
             push_feedback(
                 0, f"{by_id[a]['title']} ↔ {by_id[b]['title']}",
                 by_id[a].get("axis_domain"),
                 {"type": "near_duplicate", "partner": by_id[b]["title"],
-                 "sim": round(sim, 3),
+                 "partner_id": b, "self_id": a, "sim": round(sim, 3),
                  "note": note},
-                severity="warn", must_revise=0, pushable=pushable)
+                severity="warn", must_revise=0, pushable=True)
     # 持久化已上报集合
     con = connect()
     con.execute("INSERT OR REPLACE INTO meta(k,v) VALUES('health_reported',?)",

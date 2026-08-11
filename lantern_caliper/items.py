@@ -1,22 +1,11 @@
 # -*- coding: utf-8 -*-
 """知识条目 CRUD、阴阳闭环校准、导入导出与草稿。"""
 
-import json
-import math
 import os
 import re
 import sqlite3
 import time
 import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def _global_typical(con):
     """全库常规严密度 = 当前所有条目游标读数的中位数。
@@ -96,12 +85,16 @@ def _row_to_item(con, row, threshold, doms=None, global_typical=None):
     }
 
 def _assign_disp_and_typics(items, threshold, global_typical=None):
-    """统一计算每条的「显示领域 / 领域典型游标 / 偏移 / 碰撞」。
+    """统一计算每条的「显示领域 / 领域典型游标 / 偏移 / 离域典型较远标记」。
 
     第一性原理：偏差（偏移）必须是「相对所属领域」的，而不是相对全库一条
     水平线。不同主尺领域本就有不同的典型论证形态，所以基准必须按显示领域分别取
     —— 优先取该学科域注册的典型游标（带内视角差异），回退主干带注册值，再回退全局。
     这样地图的基准线就是"每个领域一条、高度各不相同"，而不是一条全库水平线。
+
+    「离域典型较远」(far) 是中性注意力标记，不是缺陷判定：偏移大既可能是有意义的
+    跨域洞见，也可能是分类偏差。阈值仅为注意力过滤器（可调，schema 默认 18ld）；
+    当某域样本足够（≥4）时可升级为相对该域分布的 MAD，但小库下退化回全局阈值。
     """
     backbone_names = {b["name"] for b in BACKBONE_BANDS}
     raw_counts = {}
@@ -128,6 +121,27 @@ def _assign_disp_and_typics(items, threshold, global_typical=None):
         it["direction"] = ("positive" if it["offset"] > 0
                            else "negative" if it["offset"] < 0 else "zero")
     return disp_counts
+
+def _baseline_curve():
+    """固定基准曲线：全部受控学科域按 (主干带范围, 带内 intra_band_order) 均匀铺开 center，
+    连成一条平滑上升的『领域典型形式化』参考线，与库内数据无关。前端偏差地图用它画背景
+    基准，使「从领域基准线偏移」成为全谱参照；中心重排消除带内倒挂后曲线单调上升。"""
+    curve = []
+    for b in BACKBONE_BANDS:
+        bn = b["name"]; lo, hi = b["range"]
+        regs = [(d.get("intra_band_order", 99), name)
+                for name, d in _DOMAIN_REGISTRY.items()
+                if isinstance(d, dict) and d.get("band") == bn]
+        regs.sort(key=lambda x: x[0])
+        n = len(regs)
+        for i, (order, name) in enumerate(regs):
+            c = (lo + hi) / 2 if n == 1 else lo + (hi - lo) * (i + 1) / (n + 1)
+            tv = domain_typical_vernier(name)
+            curve.append({"name": name, "band": bn, "center": round(c, 1),
+                          "typical_vernier": tv,
+                          "hidden": bool(_DOMAIN_REGISTRY[name].get("hidden", False))})
+    curve.sort(key=lambda x: x["center"])
+    return curve
 
 def list_items():
     con = connect()
@@ -198,11 +212,20 @@ def list_items():
     bb_order = {b["name"]: b.get("order", i + 1) for i, b in enumerate(BACKBONE_BANDS)}
     domain_bands.sort(key=lambda d: (bb_order.get(d["backbone"], 99),
                                      d["intra_order"], d["center"]))
+    # —— 智能开放：隐藏学科域一旦被真实内容映射（有条目以其为 axis_domain），
+    # 即在偏差地图中开放显示（趋势线 / 锚点 / 标签），与已有数据的域一致；
+    # 「根据存进来的真实内容映射智能开放」在地图入口落地。
+    baseline_curve = _baseline_curve()
+    _opened = {d["name"] for d in domain_bands}
+    for c in baseline_curve:
+        if c.get("hidden") and c["name"] in _opened:
+            c["hidden"] = False
     return {"threshold": th, "items": items, "bands": bands,
-            "domain_bands": domain_bands, "global_typical": gtyp}
+            "domain_bands": domain_bands, "global_typical": gtyp,
+            "baseline_curve": baseline_curve}
 
 def get_item(item_id):
-    """按 id 取单条（含双尺读数 / 显示领域 / 领域相对偏移 / 碰撞标记）。"""
+    """按 id 取单条（含双尺读数 / 显示领域 / 领域相对偏移 / 离域典型较远标记）。"""
     con = connect()
     th = get_threshold(con)
     row = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
@@ -310,6 +333,7 @@ def update_item(item_id, title, content, axis_domain=None, rev=None):
     if axis_domain:
         con.execute("UPDATE items SET axis_domain=? WHERE id=?",
                     (axis_domain, item_id))
+        _enforce_band_invariant(con, item_id)   # 编辑保存后横轴立即对齐学科域
     th = get_threshold(con)
     r2 = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     item = _row_to_item(con, r2, th)
@@ -318,7 +342,7 @@ def update_item(item_id, title, content, axis_domain=None, rev=None):
     log(con, item_id, "system",
         f"条目更新「{title}」：主尺 {item['band']}@{item['main_pos']}，"
         f"游标 {item['vernier']}，偏移 {item['offset']}"
-        f"（{'碰撞' if item['collision'] else '对齐'}）。后台将按当前模式补全模型读数。")
+        f"（{'离域典型较远' if item['collision'] else '贴近域典型'}）。后台将按当前模式补全模型读数。")
     con.commit(); con.close()
 
     # 互链 + 本地向量 + 离线摘要（同步、本地、快，与 add_item 一致）
@@ -507,7 +531,7 @@ def add_item(title, content, axis_domain=None):
     log(con, iid, "system",
         f"新条目入库「{title}」：主尺 {item['band']}@{item['main_pos']}，"
         f"游标 {item['vernier']}，偏移 {item['offset']}"
-        f"（{'碰撞' if item['collision'] else '对齐'}）。后台将按当前模式补全模型读数。")
+        f"（{'离域典型较远' if item['collision'] else '贴近域典型'}）。后台将按当前模式补全模型读数。")
     con.commit()
     con.close()
 
@@ -525,6 +549,7 @@ def add_item(title, content, axis_domain=None):
             if axis_domain:
                 c2.execute("UPDATE items SET axis_domain=? WHERE id=?",
                            (axis_domain, iid))
+                _enforce_band_invariant(c2, iid)   # 入库后横轴立即对齐学科域
             _set_embedding(c2, iid, local_embed(content))
             try:
                 s, tg = local_summarize(content)
@@ -604,6 +629,7 @@ def _refine(item_id, content, axis_domain=None):
                 "(item_id,scale,value,label,confidence,provider,signal_family,revised,computed_at)"
                 " VALUES(?,?,?,?,?,?,?,0,?)",
                 (item_id, "vernier", depth, None, vconf, vprov["id"], vprov["signal_family"], now))
+            _enforce_band_invariant(c, item_id, now)   # 写入路径收口：LLM 测量后横轴以学科域为锚
             th = get_threshold(c)
             row = c.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
             if row is None:
@@ -618,7 +644,10 @@ def _refine(item_id, content, axis_domain=None):
         except Exception:                              # noqa: BLE001
             pass
         try:
-            if it["collision"]:
+            # 带域一致不变量已保证横轴=学科域带；有受控学科域锚的条目，
+            # 偏移视为「深度相对所属领域」的真实信号（非错位缺陷），不再跨带重投影；
+            # 仅对无受控学科域锚的条目保留旧闭环校准。
+            if it["collision"] and not domain_band_name(it.get("axis_domain") or ""):
                 calibrate(item_id)
         except Exception:                              # noqa: BLE001
             pass
@@ -692,6 +721,8 @@ def calibrate(item_id):
             "WHERE item_id=? AND scale='main'",
             (round(pos, 1), band_of(pos)["name"], time.time(), item_id),
         )
+        # 终极收口：即便手动校准跨带移动主尺，仍以学科域所属主干带为权威横轴坐标。
+        _enforce_band_invariant(con, item_id)
         log(con, item_id, "yin->yang",
             f"阴修订 ×{n}：主尺自 {it['main_pos']}({it['band']}) 迁移至 "
             f"{round(pos,1)}({band_of(pos)['name']})，偏移 {it['offset']} → {offset}，"
@@ -705,6 +736,67 @@ def calibrate(item_id):
                 "trace": trace, "item": result}
     finally:
         con.commit(); con.close()
+
+def reconcile_band_with_domain(item_id, force_domain=None):
+    """
+    以学科域(axis_domain)为语义锚，把主尺位置(main_pos)收敛回该域所属主干带的中心，
+    消除「条目主尺落在与学科域相冲突的主干带」这类一眼错错位。
+
+    设计边界（第一性原理）：
+    - 只动主尺(main readings 的 value/label)，vernier 原样保留。
+    - 残留偏移 = 游标相对学科域典型，是「深度相对所属领域」的真实信号，不是错位缺陷，
+      故不强制压平（压平会抹掉有意义的论证风格差异）。
+    - force_domain: 当 axis_domain 为空时，指定要归入的受控学科域（如 id68 域缺失需补）。
+
+    返回 {ok, item?, old_band?, new_band?, new_pos?, msg?}。
+    """
+    from . import schema
+    con = connect()
+    try:
+        row = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+        if row is None:
+            return {"ok": False, "msg": "条目不存在"}
+        domain = (force_domain or row["axis_domain"] or "").strip()
+        if not domain:
+            return {"ok": False, "msg": "axis_domain 为空且未指定 force_domain，无法锚定主干带"}
+        target_band = schema.domain_band_name(domain)
+        if target_band is None:
+            return {"ok": False, "msg": f"学科域「{domain}」不在受控注册表，无法映射主干带"}
+        center = None
+        for b in BACKBONE_BANDS:
+            if b["name"] == target_band:
+                center = b["center"]
+                break
+        if center is None:
+            return {"ok": False, "msg": f"主干带「{target_band}」无中心值，无法收敛"}
+        old = con.execute(
+            "SELECT * FROM readings WHERE item_id=? AND scale='main'", (item_id,)
+        ).fetchone()
+        old_val = old["value"] if old else None
+        old_label = old["label"] if old else None
+        conf = (old["confidence"] if old and old["confidence"] is not None else 0.0)
+        prov = old["provider"] if old else "reconcile"
+        fam = old["signal_family"] if old else "axis-domain-anchor"
+        now = time.time()
+        con.execute(
+            "INSERT OR REPLACE INTO readings(item_id,scale,value,label,confidence,"
+            "provider,signal_family,revised,computed_at) VALUES(?,?,?,?,?,?,?,1,?)",
+            (item_id, "main", center, target_band, conf, prov, fam, now),
+        )
+        if force_domain:
+            con.execute("UPDATE items SET axis_domain=? WHERE id=?", (domain, item_id))
+        log(con, item_id, "reconcile",
+            f"以学科域「{domain}」为锚：主尺自 {old_val}({old_label}) 收敛至 "
+            f"{center}({target_band})，主干带与学科域对齐；vernier 保留，"
+            f"残留偏移视为深度相对学科域典型的信号。")
+        con.commit()
+        th = get_threshold(con)
+        new_row = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
+        return {"ok": True, "item": _row_to_item(con, new_row, th),
+                "old_band": old_label, "new_band": target_band, "new_pos": center}
+    finally:
+        con.close()
+
 
 def parse_import_text(text):
     """把粘贴文本拆成多篇：独占一行的 --- 分隔；每篇可以 # 标题 开头（标题行会被剥掉当标题）。"""
@@ -755,30 +847,4 @@ def create_draft(title):
     it = add_item(title, "（待补充）")      # add_item 已同步落 embedding，发现管线会自动接上
     return {"ok": True, "id": it["id"], "title": title}
 
-def _postprocess(con, item_id, content, axis_domain=None):
-    """入库/改写后统一：重建互链、写细粒度方向、算向量、抽摘要。
-
-    注意：embed_text/summarize 可能调用慢模型（数秒），期间绝不能持有
-    未提交的写事务（否则其他线程 busy_timeout 超时即 database is locked）。
-    所以先在本连接做完互链/向量并立即提交释放锁，摘要用独立连接写。
-    """
-    set_links_for_item(con, item_id, content)
-    if axis_domain:
-        con.execute("UPDATE items SET axis_domain=? WHERE id=?",
-                    (axis_domain, item_id))
-    try:
-        _set_embedding(con, item_id, embed_text(content))
-    finally:
-        con.commit()                              # 立即提交：向量写完后释放写锁
-    try:
-        s, tg = summarize(content)                # 慢模型调用，此时已无锁
-        if s:
-            c = connect()
-            try:
-                c.execute("UPDATE items SET summary=?, tags=? WHERE id=?",
-                          (s, tg, item_id))
-            finally:
-                c.commit(); c.close()
-    except Exception:                              # noqa: BLE001
-        pass
 

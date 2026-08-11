@@ -7,16 +7,7 @@ import os
 import re
 import sqlite3
 import time
-import hashlib
-import collections
 import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def _ensure_fts(con):
     """建 FTS5 虚表（trigram 分词，支持中文子串）并挂同步触发器；存量条目一次灌入。
@@ -189,17 +180,6 @@ def rebuild_chunk_vecs():
     con.close()
     return {"ok": True, "done": done, "failed": failed}
 
-def rebuild_chunks():
-    """为全部条目重建片段索引（重切分 + 本地向量）。换切块策略或存量迁移时调用。"""
-    items = list_items()["items"]
-    con = connect()
-    done = 0
-    for it in items:
-        _write_chunks(con, it["id"], it.get("content") or "")
-        con.commit()
-        done += 1
-    con.close()
-    return {"ok": True, "done": done}
 
 def esc(s):
     """HTML 转义：防止正文/片段里的 < > & 破坏前端渲染或被注入。"""
@@ -280,14 +260,46 @@ def local_embed(text, dim=256):
     norm = math.sqrt(sum(x * x for x in vec)) or 1.0
     return [x / norm for x in vec]
 
+_LOCAL_ST = None  # 本地高维语义模型缓存（sentence-transformers）
+# 模型已离线下载至项目根 .models/ 目录；本沙箱无法访问 huggingface.co，故强制离线，
+# 任何 hub 访问都直接失败而非卡网络。search.py 在包内，项目根为 __file__ 上溯两级。
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+_LOCAL_MODEL_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    ".models", "bge-small-zh-v1.5")
+
+def _local_st_model():
+    """懒加载本地高维 embedding 模型（BAAI/bge-small-zh-v1.5，384 维，离线、区分度高）。
+    从项目内 .models 目录加载（已离线下载，零网络依赖）；加载失败则缓存 False，
+    回退远程/哈希。"""
+    global _LOCAL_ST
+    if _LOCAL_ST is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _LOCAL_ST = SentenceTransformer(_LOCAL_MODEL_DIR)
+        except Exception as e:                        # noqa: BLE001
+            _LOCAL_ST = False
+            print(f"[embed] 本地高维模型不可用，将回退远程/哈希：{e}")
+    return _LOCAL_ST
+
+
 def embed_text(text):
-    """优先用真实 embedding 接口；熔断中或不可用时退回本地哈希向量。"""
+    """嵌入优先级：① 本地高维语义模型（区分度有保证、离线）；② 远程 embed API；③ 本地哈希兜底。
+    旧逻辑只用远程 64 维 API（区分度过低，导致跨领域误判极高相似、信号守卫降级）；
+    本地高维模型上线后，语义链（近似重复提醒 / 语义软链 / 语义检索）恢复可靠。"""
+    m = _local_st_model()
+    if m:
+        try:
+            vec = m.encode(text, normalize_embeddings=True)
+            return vec.tolist()
+        except Exception:                             # noqa: BLE001
+            pass
     if LLM_OK and not _llm.breaker_state()["open"]:
         try:
             v = _llm.embed(text, timeout=20)
             if v:
                 return v
-        except Exception:                              # noqa: BLE001
+        except Exception:                             # noqa: BLE001
             pass
     return local_embed(text)
 

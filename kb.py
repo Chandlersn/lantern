@@ -59,9 +59,6 @@ DOMAIN_TO_BAND = {d: reg["band"] for d, reg in store._DOMAIN_REGISTRY.items()}
 CONTROLLED_DOMAINS = set(store._DOMAIN_REGISTRY.keys())
 
 
-def domain_band(domain):
-    """受控学科域 → 主干领域带；非受控域返回 None。"""
-    return DOMAIN_TO_BAND.get(domain)
 
 
 def domain_typical_vernier(domain):
@@ -422,6 +419,11 @@ def list_edges(status=None):
 
 def calibrate(item_id):
     return store.calibrate(int(item_id))
+
+
+def reconcile(item_id, force_domain=None):
+    """以学科域为语义锚，把主尺收敛回所属主干带中心（见 items.reconcile_band_with_domain）。"""
+    return store.reconcile_band_with_domain(int(item_id), force_domain)
 
 
 def state():
@@ -1197,7 +1199,7 @@ TOOLS = [
     },
     {
         "name": "kb_update_spark",
-        "description": "编辑一条灵感碎片（content/title/tags 任一可改，不给则不改）。已孵化的碎片不可在原料层改，提示去知识库改。",
+        "description": "编辑一条灵感碎片（content/title/tags 任一可改，不给则不改）。碎片与知识条目互相独立，已孵化的碎片也允许在此改原始记录。",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -1207,6 +1209,18 @@ TOOLS = [
                 "tags": {"type": "string", "description": "新的标签，逗号分隔（可选）"}
             },
             "required": ["spark_id"]
+        }
+    },
+    {
+        "name": "kb_reconcile",
+        "description": "以学科域(axis_domain)为语义锚，把某条目的主尺位置收敛回该域所属主干带中心，消除『主尺带与学科域相冲突』的错位。保留游标(vernier)不动，残留偏移视为深度相对学科域典型的信号。axis_domain 为空时可用 force_domain 指定受控学科域。返回对齐前后带与位置。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "item_id": {"type": "integer", "description": "条目 id（必填）"},
+                "force_domain": {"type": "string", "description": "可选受控学科域；当条目 axis_domain 为空时指定，用于补全并锚定"}
+            },
+            "required": ["item_id"]
         }
     },
     {
@@ -1444,6 +1458,8 @@ def dispatch(name, args):
         return position(args.get("text", ""))
     if name == "kb_calibrate":
         return calibrate(args.get("item_id"))
+    if name == "kb_reconcile":
+        return reconcile(int(args.get("item_id")), args.get("force_domain"))
     if name == "kb_state":
         return state()
     if name == "kb_mode":

@@ -1,22 +1,8 @@
 # -*- coding: utf-8 -*-
 """自动日志与审计追踪（写操作/自检留痕，可清理）。"""
 
-import json
-import math
 import os
-import re
-import sqlite3
 import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def list_logs(limit=60):
     con = connect()

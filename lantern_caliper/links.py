@@ -3,23 +3,14 @@
 
 import json
 import math
-import os
 import re
 import sqlite3
 import time
-import hashlib
 import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
 def gen_edge(item_id):
-    """偏移 → 知识图谱候选边。卡尺管发现，图谱管确定。"""
+    """偏移 → 知识图谱「形式相近关联」候选（中立的注意力过滤，非缺陷判定）。
+    卡尺管发现，图谱管确定。"""
     con = connect()
     try:
         th = get_threshold(con)
@@ -29,8 +20,8 @@ def gen_edge(item_id):
         it = _row_to_item(con, row, th)
         if not it["collision"]:
             log(con, item_id, "system",
-                f"「{it['title']}」偏移 {it['offset']} 未超阈值 {th}，无需生成候选边。")
-            return {"ok": False, "msg": f"未碰撞（偏移 {it['offset']} ≤ 阈值 {th}）"}
+                f"「{it['title']}」偏移 {it['offset']} 未达注意力阈值 {th}，暂不生成形式相近关联候选。")
+            return {"ok": False, "msg": f"未达注意力阈值（偏移 {it['offset']} ≤ 阈值 {th}）"}
 
         target = best_band_for(it["vernier"])
         if target["name"] == it["band"]:
@@ -48,9 +39,9 @@ def gen_edge(item_id):
             )
             msg = (f"阳生阴：「{it['title']}」实测演绎深度 {it['vernier']} vs "
                    f"{it['band']}典型 {it['typical']} → 偏移 {it['offset']} → "
-                   f"候选边 [{kind}] → {target['name']}")
+                   f"形式相近关联候选 [{kind}] → {target['name']}")
         except sqlite3.IntegrityError:
-            msg = f"「{it['title']}」→ {target['name']} 的候选边已存在，未重复生成。"
+            msg = f"「{it['title']}」→ {target['name']} 的关联候选已存在，未重复生成。"
         log(con, item_id, "yang->yin", msg)
         return {"ok": True, "msg": msg}
     finally:
@@ -109,7 +100,7 @@ def set_edge_status(edge_id, status):
     if row:
         verb = "采纳并写入知识图谱" if status == "accepted" else "驳回"
         log(con, row["src_item"], "system",
-            f"候选边「{row['title']}」→{row['dst_band']} 已{verb}。")
+            f"关联候选「{row['title']}」→{row['dst_band']} 已{verb}。")
     con.commit(); con.close()
     return {"ok": True}
 
@@ -305,12 +296,12 @@ def discover_semantic_links(threshold=None, persist=False):
     # 库里可能混有本地哈希向量（256 维）；只跳过那一组、不让它污染真实向量组：
     # 仅当「全部」向量都是本地哈希（即库里没有任何真实 embedding）时才整体跳过，
     # 否则按维度分组，循环内的 len(va)!=len(vb) 已自动跳过跨维 pair。
-    # 仅当真实 embedding 接口在线（配置可用且未熔断）才做语义发现；
-    # 否则向量来自本地哈希/对话兜底，判别力差（实测产生跨主题 0.9+ 假相似），
-    # 必须跳过，否则会向图谱灌入误连（即用户看到的「乱」）。
-    if not (LLM_OK and not _llm.breaker_state()["open"]):
+    # 语义发现依赖可信的高维 embedding：本地 bge 模型(512维) 或高维远程接口(≥384维)。
+    # 旧的 LLM_OK 判断已过时——embeddings 现在由本地 bge 生成，与 LLM 可用性脱钩；
+    # 低维（远程 64 维退化）或本地哈希兜底向量(256维)判别力差，必须跳过，避免灌入误连。
+    if not any(len(v) >= 384 for v in vecs.values()):
         return {"suggestions": [], "threshold": threshold,
-                "note": "真实 embedding 接口不可用（未配置/已熔断），语义发现跳过（避免误连）。"}
+                "note": "库内缺少可信的高维 embedding（需 ≥384 维），语义发现跳过（避免误连）。"}
     # 库内若全为本地哈希向量（256 维），语义信号等价于关键词重叠，亦跳过。
     if vecs and all(len(v) == 256 for v in vecs.values()):
         return {"suggestions": [], "threshold": threshold,
@@ -559,9 +550,12 @@ def suggest_links(k=8, min_score=0.0, min_shared=2, persist=False, anchor=None):
         df.update(t)
     N = max(1, len(by_id))
     DF_CAP = 2                                   # 出现在 >2 篇里 = 太常见，证明不了关联
-    DICE_FLOOR = 0.08
-    CROSS_DICE = 0.12
-    CROSS_MIN_SHARED = 3
+    # 门槛针对小库适度放宽：库条目少时，长尾主题的共有特异词本来就少，
+    # 原 DICE_FLOOR=0.08 / CROSS_DICE=0.12 / CROSS_MIN_SHARED=3 会把真有共同话题的短库几乎全拒成噪声。
+    # 放宽后真有 ≥2 个特异共有词的成对仍会连（共现绿实线），通用词黑名单(R1)不变，不会泛滥。
+    DICE_FLOOR = 0.06
+    CROSS_DICE = 0.09
+    CROSS_MIN_SHARED = 2
 
     tags = {i: _tag_set(by_id[i].get("tags")) for i in by_id}
 

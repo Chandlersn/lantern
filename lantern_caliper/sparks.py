@@ -15,7 +15,6 @@ import json
 import time
 from collections import Counter
 
-from .core import *
 from .core import _llm, LLM_OK  # 碰撞创作草稿用大模型合成（离线兜底在 _compose_draft 内）
 
 
@@ -148,16 +147,13 @@ def update_spark_status(sid, status, tags=None):
 
 def update_spark(sid, content=None, title=None, tags=None):
     """编辑一条灵感碎片：content/title/tags 任一可改（None 表示不改该字段）。
-    已孵化（hatched）的碎片正文已投影进知识库，原料层不再允许编辑，提示去知识库改。
+    碎片与已落库的知识条目是独立对象，编辑原始碎片不污染知识库，故已孵化碎片也允许在原料层改。
     返回 {ok, id, msg?}。"""
     con = connect()
     row = con.execute("SELECT status FROM sparks WHERE id=?", (sid,)).fetchone()
     if not row:
         con.close()
         return {"ok": False, "msg": "碎片不存在"}
-    if row[0] == "hatched":
-        con.close()
-        return {"ok": False, "msg": "该碎片已孵化，内容请在知识库中修改"}
     fields, vals = [], []
     if content is not None:
         content = content.strip()
@@ -441,12 +437,6 @@ def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_clos
         decision = "merged"
         item_id = hit["id"]
         append_to_item(item_id, content, label="灵感碎片孵化合并")
-        fid = _feedback.push_feedback(
-            item_id, hit.get("title", title), axis_domain,
-            {"type": "hatch_merged",
-             "note": f"灵感碎片「{title}」已并入此条目（保留原双尺定位）",
-             "spark_id": sid}, severity="info")
-        feedback_ids.append(fid)
     else:
         # 新建 + 投影富化元痕 + 关联发现 + 反馈自检
         res = _kb.add_knowledge(
@@ -467,25 +457,14 @@ def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_clos
             links_found = len(sug.get("suggestions") or [])
         except Exception:                      # noqa: BLE001
             links_found = 0
-        # ④ 反馈轴自检
+        # ④ 反馈轴自检：仅坐标相对所在域典型较远（值得人工核对的结构信号）进收件箱；
+        # 其余孵化叙述（已并入 / 已建软边 / 新域建议）属系统动态，不污染收件箱——已在 hatch_events 落库备查。
         if new_item.get("collision"):
             feedback_ids.append(_feedback.push_feedback(
                 item_id, title, axis_domain,
                 {"type": "hatch_collision",
-                 "note": "孵化条目坐标偏离所在域典型读数，建议人工核对标签/关联",
+                 "note": "孵化条目坐标相对所在域典型读数较远，可能是有意义的跨域洞见，也可能是分类偏差，建议人工核对标签/关联",
                  "offset": new_item.get("offset")}, severity="warn"))
-        if axis_domain and axis_domain not in (_kb.axis_domains() or []):
-            feedback_ids.append(_feedback.push_feedback(
-                item_id, title, axis_domain,
-                {"type": "hatch_new_domain",
-                 "note": f"孵化使用了库内尚未登记的学科域「{axis_domain}」，建议登记入 axes 受控词表",
-                 "domain": axis_domain}, severity="info"))
-        if near:
-            feedback_ids.append(_feedback.push_feedback(
-                item_id, title, axis_domain,
-                {"type": "hatch_near",
-                 "note": f"与条目「{near.get('title')}」(# {near.get('id')}) 内容相近但未达合并阈值，已建立软边待确认",
-                 "near_id": near.get("id")}, severity="info"))
 
     # ⑤ 簇血缘：同簇未孵化兄弟标 incubating（联动）
     sib_incubating = []

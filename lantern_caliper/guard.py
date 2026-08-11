@@ -3,23 +3,8 @@
 
 import json
 import math
-import os
-import re
-import sqlite3
 import time
-import hashlib
-import collections
-import binascii
-import concurrent.futures
-import threading
-import sys
-import subprocess
-import ctypes
-from ctypes import wintypes
-from .core import *
 
-class IndependenceCollapseError(RuntimeError):
-    """两尺独立性坍缩，自动写入被拦截（拉闸）。"""
 
 def _indep_cfg():
     rg = (SCHEMA.get("independence_constraint", {})
@@ -217,7 +202,4 @@ def enforce_signal_guard():
         auto_log("signal", "信号可信度守卫：嵌入退化，已自动挂起语义链生成。")
     return sig
 
-def _invalidate_signal_cache():
-    global _signal_cache
-    _signal_cache = {"t": 0.0, "v": None}
 

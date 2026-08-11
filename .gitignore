@@ -38,3 +38,12 @@ Thumbs.db
 # ---- Skill 运行时状态（由 AI 驱动生成，非仓库内容）----
 skills/*/state/*.json
 skills/*/scripts/__pycache__/
+
+# ---- 本地离线模型（大体积二进制，非源码；已离线下载至 .models/）----
+.models/
+
+# ---- 临时备份快照（如 schema.json.bak-*）----
+*.bak
+
+# ---- 临时测试/副本（_remtest 下为 db 副本等一次性产物，绝不入库）----
+_remtest/
