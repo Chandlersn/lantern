@@ -12,6 +12,7 @@
 """
 
 import json
+import re
 import time
 from collections import Counter
 
@@ -183,6 +184,60 @@ def delete_spark(sid):
     return ok
 
 
+# ----------------------------------------------------------------- 统计概览（供总览页）
+def spark_cluster_count(min_shared=2):
+    """仅统计聚类簇数（size>=2），不截断、不带成员详情，供总览计数用。"""
+    sparks = list_sparks(limit=500)
+    if len(sparks) < 2:
+        return 0
+    vec = {s["id"]: _spark_terms(s["content"]) for s in sparks}
+    ids = [s["id"] for s in sparks]
+    parent = {i: i for i in ids}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            a, b = vec[ids[i]], vec[ids[j]]
+            if not a or not b:
+                continue
+            if len(a & b) >= min_shared:
+                union(ids[i], ids[j])
+    roots = {}
+    for s in sparks:
+        roots[find(s["id"])] = roots.get(find(s["id"]), 0) + 1
+    return sum(1 for c in roots.values() if c >= 2)
+
+
+def spark_stats():
+    """灵感碎片统计概览（供总览页展示）。
+
+    返回：总数 + 各状态计数（原料 raw / 孵化中 incubating / 已孵化 hatched）
+    + 当前聚类簇数（size>=2）。轻量、可在 /api/state 轮询中稳定调用。"""
+    con = connect()
+    rows = con.execute(
+        "SELECT status, COUNT(*) FROM sparks GROUP BY status").fetchall()
+    con.close()
+    by = {r[0]: r[1] for r in rows}
+    total = sum(by.values())
+    return {
+        "total": total,
+        "raw": by.get("raw", 0),
+        "incubating": by.get("incubating", 0),
+        "hatched": by.get("hatched", 0),
+        "clusters": spark_cluster_count(),
+    }
+
+
 # ----------------------------------------------------------------- 聚类萌发（软洞察）
 def spark_clusters(top_k=8, min_shared=2, min_jac=0.0):
     """离线聚类萌发：关键词共现（并查集）把相近碎片贪心聚成主题簇。
@@ -293,53 +348,104 @@ def _infer_domain(sp, cluster_terms, kbm):
 
 
 # ----------------------------------------------------------------- 孵化成知识条目（智能孵化 · 两阶段）
-def _compose_draft(title, spark_content, cluster_terms, related, decision, hit):
-    """碰撞创作：结合知识库相关内容，把灵感碎片合成一篇可入库的临时文章。
+# 解析 / 优化碎片 两段分隔符（模型须原样输出，便于稳定拆分）
+_ANAL_RE = re.compile(r"={2,}\s*解析\s*={2,}", re.S)
+_REFINE_RE = re.compile(r"={2,}\s*优化碎片\s*={2,}", re.S)
 
-    优先真实大模型；不可用/失败则退回本地模板（仍可编辑）。本函数【不落库】——
-    由 commit 阶段决定是新建还是并入。"""
+
+def _split_brainstorm(raw):
+    """把模型返回的「===解析===...===优化碎片===...」拆成 (analysis, refined)。
+
+    兼容模型不严格分段：若只有优化碎片段，整段作 refined；若只写了解析段，
+    则 refined 退回该段内容；若完全没分段，整段作 refined（analysis 留空）。"""
+    raw = (raw or "").strip()
+    if not raw:
+        return "", ""
+    a_m = _ANAL_RE.search(raw)
+    r_m = _REFINE_RE.search(raw)
+    if a_m and r_m and r_m.start() > a_m.start():
+        analysis = raw[a_m.end():r_m.start()].strip()
+        refined = raw[r_m.end():].strip()
+    elif r_m:
+        analysis = raw[:r_m.start()].strip()
+        refined = raw[r_m.end():].strip()
+    elif a_m:
+        refined = raw[a_m.end():].strip()
+        analysis = ""
+    else:
+        analysis, refined = "", raw
+    if not refined:
+        refined = analysis or raw
+    return analysis, refined
+
+
+def _brainstorm_and_refine(title, spark_content, cluster_terms, related, decision, hit):
+    """智能孵化核心：让模型对碎片做「头脑风暴解析」，并【反哺优化碎片】。
+
+    返回 (analysis, refined)：
+      · analysis  = 模型的跨学科解析（核心观点 / 新问题 / 交叉领域 / 反方 / 下一步），
+                    【仅作思考痕迹展示给用户，绝不入库】；
+      · refined   = 把解析洞见反哺回碎片后、重写出的「优化版知识要点」（连贯知识短文），
+                    它才是【入库正文 + 写回碎片本身】的载体。
+
+    即：头脑风暴的价值不在「分析本身成为知识」，而在「用分析把碎片打磨成更好的知识」。
+    优先真实大模型；不可用/失败退回本地模板。本函数【不落库】。"""
     related_text = "\n\n".join(
         f"【相关条目 #{r['id']} {r.get('title', '')}】\n{r.get('excerpt', '')}"
         for r in (related or [])[:3])
     if decision == "merged" and hit:
         sys_p = ("你是知识整理助手。下面给出一段「新的灵感碎片」和一篇「已有知识条目」。"
-                 "请基于已有条目的既有内容，把这条新灵感【吸收、融合】成一段可追加到该条目下的"
-                 "补充内容：聚焦新意，不要复述已有条目已讲透的部分；保留原条目的视角与术语；"
-                 "输出纯文本（可分段，不用标题），300-600 字。")
+                 "请完成两件事：\n"
+                 "1) 头脑风暴解析：基于已有条目，点出这条新灵感带来的新角度、值得深究的问题、"
+                 "或可能的反方视角（简短，2-4 点）。\n"
+                 "2) 融合补充：把这条新灵感【吸收、融合】成一段可追加到该条目下的补充内容："
+                 "聚焦新意，不要复述已有条目已讲透的部分；保留原条目的视角与术语；"
+                 "输出纯文本（可分段，不用标题），300-600 字。\n"
+                 "请严格按以下格式输出（两个分隔符必须原样保留）：\n"
+                 "===解析===\n...简短解析...\n===优化碎片===\n...融合后的补充内容...")
         usr = (f"已有条目《{hit.get('title', '')}》片段：\n{hit.get('content', '')[:900]}\n\n"
                f"新灵感碎片：\n{spark_content}")
     else:
-        sys_p = ("你是知识整理助手。下面给出一段「灵感碎片」和若干「知识库中相关的条目素材」。"
-                 "请围绕碎片主题，把这些素材【碰撞、综合】成一篇结构清晰、可独立入库的知识短文："
-                 "含 2-4 个小标题与要点，逻辑连贯，不堆砌；输出 Markdown，500-900 字，无需额外解释。")
+        sys_p = ("你是知识策展与头脑风暴助手。下面给出一段「灵感碎片」（用户的原始想法，可能很粗糙）"
+                 "和若干「知识库里相关的条目素材」。请完成两件事：\n"
+                 "1) 头脑风暴解析：以碎片为种子，做跨学科对话式解析，至少包含——"
+                 "   · 核心观点凝练（保留原意，不歪曲、不遗漏关键直觉）；"
+                 "   · 2-3 个由该碎片引申出的、值得深究的新问题；"
+                 "   · 它可能与哪些相邻学科/概念产生交叉（点出具体领域或概念名，不要空泛）；"
+                 "   · 一种可能的反方视角或边界条件（避免片面）；"
+                 "   · 若可落地，1-2 个可行的下一步（实验 / 检索 / 写作方向）。\n"
+                 "2) 优化碎片：把你从上述解析中提炼出的洞见，反哺回这条碎片本身——把原始碎片"
+                 "【重写】成一段更凝练、结构更清晰、可直接作为知识条目入库的「优化版知识要点」。"
+                 "它应保留原意与关键直觉，吸收解析中的交叉视角与反方边界；但【不要】写成"
+                 "「解析报告」或「头脑风暴清单」的样子，而是一篇连贯的知识短文"
+                 "（含小标题，300-700 字）。\n"
+                 "请严格按以下格式输出（两个分隔符必须原样保留）：\n"
+                 "===解析===\n...头脑风暴解析（Markdown）...\n"
+                 "===优化碎片===\n...重写后的优化版知识要点（Markdown，可直接入库）...")
         usr = f"灵感碎片：\n{spark_content}\n\n知识库相关素材：\n{related_text}"
     if LLM_OK:
         try:
-            raw, _ = _llm.chat(sys_p, usr, temperature=0.4, max_tokens=1000,
-                               timeout=45, retries=1)
+            raw, _ = _llm.chat(sys_p, usr, temperature=0.4, max_tokens=1200,
+                               timeout=60, retries=1)
             if raw and raw.strip():
-                return raw.strip()
+                return _split_brainstorm(raw)
         except Exception:                          # noqa: BLE001
             pass
-    return _local_draft(title, spark_content, cluster_terms, related, decision, hit)
+    return _local_brainstorm(title, spark_content, cluster_terms, related, decision, hit)
 
 
-def _local_draft(title, spark_content, cluster_terms, related, decision, hit):
-    """离线兜底草稿：直接摊开碎片 + 相关素材，标注为待润色的初稿（仍可编辑后入库）。"""
-    lines = [f"# {title}", "",
-             "> 以下为离线初稿（未调用大模型），可据此润色后入库。", "",
-             "## 灵感碎片原文", spark_content, ""]
-    if cluster_terms:
-        lines += ["## 来源簇主题", "、".join(cluster_terms[:5]), ""]
-    if related:
-        lines += ["## 知识库相关素材（碰撞参考）"]
-        for r in related[:3]:
-            lines.append(f"- #{r['id']} {r.get('title', '')}：{r.get('excerpt', '')[:120]}")
-        lines.append("")
+def _local_brainstorm(title, spark_content, cluster_terms, related, decision, hit):
+    """离线兜底：未调用大模型。refined = 原始碎片（轻量格式化，诚实标注），
+    analysis = 说明离线未跑解析。配置 provider 后重新孵化才会真正解析并反哺优化。"""
+    analysis = ("> 离线模式未调用大模型：本应在此给出跨学科解析（新问题 / 交叉领域 / 反方视角 / 下一步），"
+                "并据此把碎片重写为「优化版知识要点」。配置 provider 后重新孵化即可自动完成。")
     if decision == "merged" and hit:
-        lines += [f"## 将并入《{hit.get('title', '')}》# {hit.get('id')}",
-                  "（请在此补充与已有条目互补的新内容）", ""]
-    return "\n".join(lines)
+        refined = spark_content
+    else:
+        refined = (f"# {title}\n\n{spark_content}\n\n"
+                   "> 以下为离线初稿（未调用大模型）；配置 provider 后重新孵化可由模型"
+                   "自动解析并反哺优化碎片。")
+    return analysis, refined
 
 
 def draft_hatch(sid, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0):
@@ -374,7 +480,7 @@ def draft_hatch(sid, title=None, axis_domain=None, run_closure=True, hit_thresho
                             "excerpt": (r.get("content") or "")[:240],
                             "score": round(sc, 2)})
     decision = "merged" if hit else "new"
-    draft = _compose_draft(title, content, cluster_terms, related, decision, hit)
+    analysis, refined = _brainstorm_and_refine(title, content, cluster_terms, related, decision, hit)
     return {
         "ok": True, "spark_id": sid, "title": title, "axis_domain": axis_domain,
         "decision": decision,
@@ -382,25 +488,21 @@ def draft_hatch(sid, title=None, axis_domain=None, run_closure=True, hit_thresho
         "merge_target_title": (hit or {}).get("title"),
         "near_match_item_id": (near or {}).get("id"),
         "cluster_terms": cluster_terms, "siblings": siblings,
-        "related_items": related[:5], "draft": draft,
+        "related_items": related[:5], "draft": refined, "analysis": analysis,
     }
 
 
-def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_closure):
+def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_closure,
+                       already_refined=False):
     """阶段二落地（单一真源）：把（草稿或原始）内容接入知识网，跑完整六阶段系统事件。
 
-    管线（对照「文件移动」式旧孵化）：
-      ① 冗余闸门：先 kb.query 判命中，命中则【增量合并】原条目（保留 id/双尺定位，
-         追加带日期的证据），不新建；未命中则新建。
-      ② 投影富化：查碎片所属簇，提取 shared_terms + 兄弟，预填 axis_domain 建议，
-         并在正文留「孵化自灵感碎片（簇主题：…）」元痕（不下结论仅留痕）。
-      ③ 全库关联发现：新建后以新节点为中心跑 suggest_links，把潜在关联写成
-         links(confirmed=0) 软边，回报 links_found。
-      ④ 反馈轴自检：collision / 新域候选 / 近似未合并 → 各推一条 feedback_inbox，
-         让库自我更新、用户看到 🔔。
-      ⑤ 簇血缘：同簇未孵化兄弟标 incubating（联动），血缘写入 hatch_events。
-      ⑥ 事件日志：把本次孵化的决策/簇/关联数/反馈数/兄弟数落 hatch_events，
-         供 kb.hatch_stats() 聚合（库可「反思」生长；Skill 可据以校准轴绩点）。"""
+    与上一版的关键区别——孵化不再把「模型头脑风暴解析」直接塞进知识库。解析只是
+    思考痕迹（返回前端展示），真正的入库正文与【写回碎片本身】的，是用解析反哺后
+    重写出的「优化版知识要点」(refined)。即：头脑风暴的价值在「打磨碎片」，不在
+    「分析本身成为知识」。
+
+    参数 already_refined：阶段一 draft 已产出 refined 且用户已微调，commit 时直接采用，
+    不再重跑模型（尊重用户编辑）；一键 hatch 走 False，由本函数跑模型生成 refined。"""
     sp = get_spark(sid)
     if not sp:
         return {"ok": False, "msg": "碎片不存在"}
@@ -431,16 +533,43 @@ def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_clos
             near = top
 
     feedback_ids, links_found, decision, item_id, new_item = [], 0, "new", None, None
+    analysis = ""
+
+    # 相关素材（合并 / 新建两分支都可能用到）
+    related = []
+    for r in results[:3]:
+        if r.get("id") is not None and r.get("content"):
+            related.append({"id": r["id"], "title": r.get("title", ""),
+                            "excerpt": (r.get("content") or "")[:240],
+                            "score": round(float(r.get("score", 0) or 0), 2)})
 
     if hit:
-        # 合并：保留原条目 id / 双尺定位，追加带日期的证据
+        # 合并：保留原条目 id / 双尺定位，追加带日期的证据（补充内容由模型融合生成）
         decision = "merged"
         item_id = hit["id"]
-        append_to_item(item_id, content, label="灵感碎片孵化合并")
+        if already_refined:
+            supplement = content
+        else:
+            analysis, supplement = _brainstorm_and_refine(
+                title, content, cluster_terms, related, "merged", hit)
+        if not supplement or not supplement.strip():
+            supplement = content
+        append_to_item(item_id, supplement, label="灵感碎片孵化合并")
+        # 合并场景：碎片是「被吸收的想法」，不覆盖其原始内容；解析仅作前端展示
     else:
         # 新建 + 投影富化元痕 + 关联发现 + 反馈自检
+        # 关键：模型先对碎片「头脑风暴解析」，再用解析反哺出「优化版知识要点」(refined)；
+        # 入库正文与写回碎片本身的都是 refined，解析只作思考痕迹返回前端，绝不入库。
+        if already_refined:
+            refined = content            # 阶段一已产出 refined 且用户已微调，直接采用
+            analysis = ""               # 解析已在阶段一返回前端，此处不重跑
+        else:
+            analysis, refined = _brainstorm_and_refine(
+                title, content, cluster_terms, related, "new", None)
+        if not refined or not refined.strip():
+            refined = content
         res = _kb.add_knowledge(
-            title, content, bool(run_closure),
+            title, refined, bool(run_closure),
             _kb.normalize_axis_domain(axis_domain) if axis_domain else None)
         if not res.get("ok"):
             con.close()
@@ -451,6 +580,12 @@ def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_clos
             note = "、".join(cluster_terms[:4])
             append_to_item(
                 item_id, f"本条目孵化自灵感碎片，簇主题：{note}", label="碎片来源")
+        # ★ 反哺优化碎片：把模型解析后重写的知识要点写回碎片本身，
+        #   让「原料层」也升级为更凝练的版本（这才是头脑风暴对碎片的真正价值）
+        try:
+            update_spark(sid, content=refined)
+        except Exception:                      # noqa: BLE001
+            pass
         # ③ 全库关联发现：以新节点为中心，写软边
         try:
             sug = _links.suggest_links(k=8, min_shared=2, persist=True, anchor=item_id)
@@ -496,6 +631,8 @@ def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_clos
         "cluster_terms": cluster_terms, "siblings_incubating": sib_incubating,
         "siblings_total": siblings, "links_found": links_found,
         "feedback_ids": feedback_ids, "axis_domain": axis_domain,
+        "brainstorm": (decision == "new") and LLM_OK,
+        "analysis": analysis,
         "item": (new_item or hit),
     }
 
@@ -503,7 +640,8 @@ def _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, run_clos
 def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_threshold=4.0,
                 draft_only=False):
     """智能孵化入口。draft_only=True 时只生成碰撞创作草稿（阶段一，不落库）；
-    否则直接落库（兼容旧调用 / 整簇孵化 / Skill）。"""
+    否则直接落库（兼容旧调用 / 整簇孵化 / Skill）。一键 hatch 会跑模型解析并把
+    碎片重写为优化版知识要点，再入库 + 写回碎片本身。"""
     if draft_only:
         return draft_hatch(sid, title, axis_domain, run_closure, hit_threshold)
     sp = get_spark(sid)
@@ -512,12 +650,14 @@ def hatch_spark(sid, title=None, axis_domain=None, run_closure=True, hit_thresho
     if sp.get("hatched_item_id"):
         return {"ok": False, "msg": "该碎片已孵化", "item_id": sp["hatched_item_id"]}
     return _commit_hatch_core(sid, sp["content"], title, axis_domain, hit_threshold,
-                              run_closure)
+                              run_closure, already_refined=False)
 
 
 def commit_hatch(sid, content, title=None, axis_domain=None, hit_threshold=4.0):
-    """阶段二：用户微调草稿后确认入库。content 为用户编辑后的正文（必填）。"""
+    """阶段二：用户微调草稿后确认入库。content 为用户编辑后的正文（必填）。
+    already_refined=True：尊重用户在阶段一编辑器里的微调，直接采用，不再重跑模型。"""
     content = (content or "").strip()
     if not content:
         return {"ok": False, "msg": "草稿内容不能为空"}
-    return _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, True)
+    return _commit_hatch_core(sid, content, title, axis_domain, hit_threshold, True,
+                              already_refined=True)

@@ -13,16 +13,16 @@
   把相关知识组装成上下文喂给自己——「怎么使用、怎么处理数据的关联性」全是 Agent 的职责。
   本规范列出的全部工具，Agent 均可自主调用。
 
-> 前端界面（`web/index.html`）只是**展示窗**，不是交互窗口。人不在界面里"用"知识库，
+> 前端界面（`frontend/index.html`）只是**展示窗**，不是交互窗口。人不在界面里"用"知识库，
 > 而是定义它、校验它；Agent 在运行时通过 REST / MCP 真正消费它。
 
 任何 Agent 都可通过**三条等价通道**调用同一套能力：
 
 | 通道 | 适用对象 | 接入方式 |
 |------|----------|----------|
-| **REST** | HTTP 型 Agent / 脚本 / 浏览器 | `http://127.0.0.1:8731/api/kb/*`（先 `python server.py`） |
-| **MCP** | 支持 Model Context Protocol 的 Agent（Claude Desktop / Cursor / 框架） | `mcp_server.py`，server 名 `lantern-kb` |
-| **Skill + CLI** | WorkBuddy 等自带工具链的 Agent | 安装 `lantern-kb` Skill，经 `kb_cli.py` 直连，无需服务在线 |
+| **REST** | HTTP 型 Agent / 脚本 / 浏览器 | `http://127.0.0.1:8731/api/kb/*`（先 `python backend/server.py`） |
+| **MCP** | 支持 Model Context Protocol 的 Agent（Claude Desktop / Cursor / 框架） | `backend/mcp_server.py`，server 名 `lantern-kb` |
+| **Skill + CLI** | WorkBuddy 等自带工具链的 Agent | 安装 `lantern-kb` Skill，经 `backend/kb_cli.py` 直连，无需服务在线 |
 
 三条通道共享 `kb.py` 的同一份 `TOOLS` 与 `dispatch`，行为完全一致。
 
@@ -113,7 +113,7 @@
 服务启动（在仓库根目录）：
 
 ```bash
-python server.py        # 监听 127.0.0.1:8731
+python backend/server.py        # 监听 127.0.0.1:8731
 ```
 
 所有 `kb_*` 工具均以 `POST /api/kb/<tool>` 暴露，请求体 JSON 与下方 MCP `arguments` 同构；
@@ -184,7 +184,7 @@ python server.py        # 监听 127.0.0.1:8731
   "mcpServers": {
     "lantern-kb": {
       "command": "<你的 python 解释器绝对路径>",
-      "args": ["<仓库根>/mcp_server.py"],
+      "args": ["<仓库根>/backend/mcp_server.py"],
       "cwd": "<仓库根>"
     }
   }
@@ -215,7 +215,7 @@ python server.py        # 监听 127.0.0.1:8731
 - 纯 Python 标准库（`sqlite3` / `urllib` / `json` / `re` / `math`），`pip install` 非必需。
 - 真实模型凭据由仓库自身目录的 `.env`（默认值）与 `llm_config.json`（用户自定义，优先）提供，
   不依赖任何外部目录。
-- 数据库 `lantern.db`、缓存 `llm_cache.db`、密钥 `.env` 已被 `.gitignore` 排除；演示数据由 `seed_demo.py` 合成生成。
+- 数据库 `lantern.db`、缓存 `llm_cache.db`、密钥 `.env` 已被 `.gitignore` 排除；演示数据由 `backend/seed_demo.py` 合成生成。
 
 ---
 
@@ -224,13 +224,13 @@ python server.py        # 监听 127.0.0.1:8731
 让 WorkBuddy（或同类 Agent）把知识库当成**自带可调用的工具**，在任意对话里联合使用：
 
 1. 安装 `lantern-kb` Skill（封装 `kb.py` 的全部工具）。
-2. 调用入口 `kb_cli.py`，由 Python 运行：
+2. 调用入口 `backend/kb_cli.py`，由 Python 运行：
 
 ```bash
-python kb_cli.py <tool> '<json-args>'
+python backend/kb_cli.py <tool> '<json-args>'
 ```
 
-脚本自切换 cwd 到自身目录，直接读 `lantern.db`，**不依赖 `server.py` 在线**。
+脚本自切换 cwd 到仓库根，直接读 `lantern.db`，**不依赖 `backend/server.py` 在线**。
 `python kb_cli.py list` 列出全部 29 个工具名；其余用法与 MCP 工具一一对应。
 
 典型"联合使用"：接到知识相关任务 → `kb_schema` 看坐标空间 → `kb_query`/`kb_context` 取知识喂推理

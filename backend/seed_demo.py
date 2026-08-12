@@ -7,20 +7,23 @@
 本脚本提供一条显式、可重复的生成/重置入口。
 
 用法：
-    python seed_demo.py            # 库不存在则生成演示数据；已存在则仅补全文章镜像
-    python seed_demo.py --force    # 清空现有库与文章镜像，重新生成一份干净的演示数据
+    python backend/seed_demo.py            # 库不存在则生成演示数据；已存在则仅补全文章镜像
+    python backend/seed_demo.py --force    # 清空现有库与文章镜像，重新生成一份干净的演示数据
 
 说明：
     - 演示数据来自 lantern_caliper.core.SEED（合成、无个人信息的样例知识）。
     - 离线即可运行：没有配置大模型时，双尺定位走本地启发式；配置后后台自动升级。
-    - 生成完成后即可 `python server.py` 启动，访问 http://127.0.0.1:8731/。
+    - 生成完成后即可 `python backend/server.py` 启动，访问 http://127.0.0.1:8731/。
 """
 import argparse
 import os
 import shutil
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# seed_demo.py 已从仓库根迁入 backend/：引擎包 lantern_caliper 位于仓库根，需把仓库根注入 sys.path
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 import lantern_caliper as store
 

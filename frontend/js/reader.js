@@ -186,11 +186,16 @@ async function renderReader(){
     : '';
   const renderRdLinks = ()=>{
     const out = (r.outlinks||[]), back = (r.backlinks||[]);
-    $('rdLinks').innerHTML = (out.length || back.length)
-      ? '<label style="font-size:11px;">引用 / 被引用 · 作者手写的 [[...]] 双链（有正文事实依据）</label>' +
-        (out.length? '<div class="chips" style="margin-top:4px;">'+out.map(o=>`<span class="tag">连 ${esc(o.title)}</span>`).join('')+'</div>' : '') +
-        (back.length? '<div class="chips" style="margin-top:6px;">'+back.map(o=>`<span class="tag col">被 ${esc(o.title)} 引用</span>`).join('')+'</div>' : '')
-      : '<span class="muted">这篇文章还没有用手写 [[...]] 引用其它条目——引用关系需要作者在正文里明确写出，不能由系统凭空生成。</span>';
+    // 出链 / 入链按 id 合并去重：双向互链只列一次，去掉「连 / 被引用」冗余措辞
+    const rel = new Map();
+    for (const o of out)  if (o && o.id != null) rel.set(o.id, o.title);
+    for (const o of back) if (o && o.id != null) rel.set(o.id, o.title);
+    $('rdLinks').innerHTML = rel.size
+      ? '<label style="font-size:11px;">互链（智能助手织入）</label>' +
+        '<div class="chips" style="margin-top:4px;">' +
+        [...rel.entries()].map(([id,t])=>`<span class="tag">${esc(t)}</span>`).join('') +
+        '</div>'
+      : '<span class="muted">这篇文章还没有被织入 [[...]] 互链——这类确定的引用关系由智能助手在加工知识库时自动建立（而非凭空猜测）。</span>';
   };
   renderRdLinks();
   const renderRdRelated = async ()=>{
@@ -230,7 +235,7 @@ async function renderReader(){
     }catch(e){ box.innerHTML = '<span class="muted">暂时找不出相近的。</span>'; }
   };
   renderRdRelated();
-  // ---- 插入互链（手写 [[...]] 双链，催生作者意图硬链/蓝实线） ----
+  // ---- 插入互链（[[...]] 双链，催生 AI 织入硬链/蓝实线） ----
   $('btnRdLink').onclick = ()=>openRdLinkModal();
   $('rdLinkClose').onclick = ()=>closeRdLinkModal();
   $('rdLinkModal').onclick = (e)=>{ if(e.target===$('rdLinkModal')) closeRdLinkModal(); };

@@ -244,6 +244,14 @@
   .ov-band .dot{width:10px;height:10px;border-radius:999px;flex:0 0 10px;}
   .ov-bar{flex:1;height:8px;background:#EFE9DB;border-radius:999px;overflow:hidden;}
   .ov-bar div{height:100%;border-radius:999px;}
+  .ov-spark-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;}
+  .ov-spark{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-width:84px;padding:11px 14px;background:var(--bg);border:1px solid var(--line);border-radius:10px;}
+  .ov-spark .n{font-size:23px;font-weight:600;color:var(--ink);line-height:1.1;}
+  .ov-spark .t{font-size:11.5px;color:var(--muted);margin-top:4px;text-align:center;}
+  .ov-spark .n.hot{color:var(--cinnabar);}
+  .ov-spark .n.warn{color:#BA7517;}
+  .ov-spark .n.llm{color:#3B6D11;}
 
   /* mark 高亮 */
   mark{background:#FBE7A0;color:#3a352c;padding:0 1px;border-radius:2px;}
@@ -400,18 +408,20 @@
   .det-tags{margin:4px 0 9px;display:flex;flex-wrap:wrap;gap:5px;}
   .det-tags .tag{background:var(--paper);}
   .det-summary{color:var(--cinnabar);font-style:italic;}
-  .det-stats{display:flex;gap:8px;margin:11px 0;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 4px;}
-  .det-stats>div{flex:1;text-align:center;}
-  .det-stats b{display:block;font-size:21px;line-height:1.1;color:var(--ink);}
-  .det-stats span{font-size:11px;color:var(--stone);}
+  .det-stats{display:flex;align-items:center;gap:10px;margin:11px 0;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:11px 14px;}
+  .det-stats .det-stat-main{flex:0 0 auto;text-align:center;}
+  .det-stats .det-stat-main b{display:block;font-size:21px;line-height:1.1;color:var(--ink);}
+  .det-stats .det-stat-main span{font-size:11px;color:var(--stone);}
+  .det-stats .det-stat-dir{flex:1;min-width:0;font-size:12.5px;color:var(--stone);line-height:1.4;}
   .det-sub{display:flex;align-items:center;gap:8px;margin:13px 0 7px;font-size:12.5px;}
   .det-sub .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px;letter-spacing:.6px;color:var(--stone);}
   .det-sub strong{color:var(--ink);}
   .det-count{margin-left:auto;}
 
   /* 左侧竖条检查器（借鉴 person_dashboard：选中节点滑入，画布让位重排） */
-  .graph-inspector{position:absolute;top:0;left:0;height:100%;width:324px;max-width:86%;z-index:7;
-    background:var(--card);border-right:1px solid var(--line);box-shadow:8px 0 24px rgba(40,36,30,.12);
+  .graph-inspector{position:absolute;top:36px;bottom:36px;left:24px;height:auto;width:324px;max-width:86%;z-index:4;
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:8px 0 24px rgba(40,36,30,.12);
     transform:translateX(-101%);opacity:0;pointer-events:none;
     transition:transform .28s var(--ease),opacity .2s var(--ease);
     display:flex;flex-direction:column;overflow:hidden;}
@@ -454,8 +464,11 @@
     border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px 12px;
     box-sizing:border-box;margin-bottom:8px;}
   .viz-filter:focus{outline:none;border-color:var(--cinnabar);box-shadow:0 0 0 2px rgba(181,48,42,.14);}
-  .viz-list{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px;
-    background:#fff;padding:4px;}
+  .viz-list{border:1px solid var(--line);border-radius:8px;
+    background:#fff;padding:4px;overflow:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent;}
+  .viz-list::-webkit-scrollbar{width:8px;}
+  .viz-list::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px;border:2px solid #fff;}
+  .viz-list::-webkit-scrollbar-track{background:transparent;}
   .viz-item{display:flex;align-items:center;justify-content:space-between;gap:10px;
     padding:7px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--ink);transition:background .16s var(--ease);}
   .viz-item:hover{background:var(--paper);}
@@ -616,9 +629,8 @@
 
   /* 灵感碎片（原料层） */
   #view-sparks .sp-card, #view-sparks .sp-cluster{margin-bottom:12px;}
-  /* 灵感原料舱：把未投影的碎片整体隔离在一个独立盒子里，与知识库视觉切割 */
-  .sp-vault{border:1.5px dashed var(--cinnabar);border-radius:16px;padding:16px 18px 4px;
-            background:rgba(181,48,42,.035);margin-bottom:18px;}
+  /* 灵感原料舱：去掉红色虚线外框（无必要）；内部碎片卡片自带边框，无需外层盒子视觉切割 */
+  .sp-vault{padding:16px 18px 4px;margin-bottom:18px;}
   /* 碎片卡片：明确做成"盒子"，与正式知识卡片区分；原料态=草稿/隔离视觉 */
   #view-sparks .sp-card{background:var(--card);border:1px solid var(--line);border-radius:12px;
                         padding:12px 14px;}
@@ -648,6 +660,11 @@
   .sp-rel summary{cursor:pointer;user-select:none;}
   .sp-rel-list{margin:6px 0 0;padding-left:18px;}
   .sp-rel-list li{margin-bottom:6px;line-height:1.5;}
+  .sp-anal{margin-top:6px;font-size:12.5px;color:var(--muted);}
+  .sp-anal summary{cursor:pointer;user-select:none;}
+  .sp-anal-body{margin:6px 0 0;padding:10px 12px;font-size:13px;line-height:1.7;
+    color:var(--ink);background:var(--paper);border:1px dashed var(--line);
+    border-radius:10px;white-space:pre-wrap;word-break:break-word;}
   #view-sparks .sp-report{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
   .sp-head{display:flex;align-items:center;gap:8px;justify-content:space-between;}
   .sp-head b{font-size:13.5px;color:var(--ink);}

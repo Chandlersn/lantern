@@ -6,6 +6,7 @@ function statCard(n, t, kind){
 }
 function renderOverview(){
   const g = S.independence;
+  const sp = S.sparks || {total:0, raw:0, incubating:0, hatched:0, clusters:0};
   const linked = new Set();
   (S.links||[]).forEach(l=>{ linked.add(l.src); linked.add(l.dst); });
   const isolated = S.items.filter(i=>!linked.has(i.id));
@@ -15,7 +16,11 @@ function renderOverview(){
     statCard(softN, '引擎关联', softN?'':'stone') +
     statCard((S.links||[]).length, '条目互链') +
     statCard(isolated.length, '还没有连接', isolated.length?'':'stone') +
-    statCard(S.mode==='llm'?'智能':'简单', '判断方式');
+    statCard(S.mode==='llm'?'智能':'简单', '判断方式') +
+    statCard(sp.total, '灵感碎片', sp.total?'spark-jump':'stone');
+  // 顶部「灵感碎片」卡可点击跳转灵感碎片页
+  const jc = document.querySelector('#stats .spark-jump');
+  if(jc){ jc.style.cursor='pointer'; jc.onclick = () => { if(typeof selectView==='function') selectView('sparks'); }; }
   const sb = S.summary_backend || {};
   $('sumBackend').innerHTML = sb.backend === 'llm'
     ? '摘要与标签由模型生成。'
@@ -66,5 +71,18 @@ function renderOverview(){
       <b style="flex:0 0 26px;text-align:right;font-size:12.5px;">${n}</b>
     </div>`;
   }).join('');
+  // 灵感碎片统计拆解：原料 / 孵化中 / 已孵化 / 聚类簇
+  $('ovSparkTotal').textContent = sp.total ? `· 共 ${sp.total} 条` : '· 暂无';
+  $('ovSparkStats').innerHTML =
+    sparkStatBlock(sp.raw, '原料（待孵化）', 'hot') +
+    sparkStatBlock(sp.incubating, '孵化中', 'warn') +
+    sparkStatBlock(sp.hatched, '已孵化', 'llm') +
+    sparkStatBlock(sp.clusters, '聚类簇');
+  const goBtn = $('ovSparkGo');
+  if(goBtn) goBtn.onclick = () => { if(typeof selectView==='function') selectView('sparks'); };
+}
+
+function sparkStatBlock(n, t, kind){
+  return `<div class="ov-spark"><span class="n ${kind||''}">${n}</span><span class="t">${t}</span></div>`;
 }
 

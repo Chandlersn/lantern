@@ -12,7 +12,7 @@
 
 - **双尺度定位**：每条知识都被两把互不互见的尺子度量，得到「领域带 + 演绎深度」的坐标，而不是单维度的文件夹归档。
 - **阴阳闭环**：游标读数偏离所在领域带的典型值时触发闭环，自动产出跨学科候选知识边（逻辑同构 / 未形式化），让差异被摊开、而非被抹平。
-- **知识图谱（双来源叙事）**：硬链 = 作者意图（`[[...]]`），软链 = 引擎发现（关键词共现 / 语义相似 / 跨域桥接）。两类来源、置信度与着色在 UX 上明确区分。
+- **知识图谱（双来源叙事）**：硬链 = AI 织入（`[[...]]`，确定性关联），软链 = 引擎发现（关键词共现 / 语义相似 / 跨域桥接）。两类来源、置信度与着色在 UX 上明确区分。
 - **概念衍生层**：后端把知识提炼为概念节点并做双向桥接推荐，作为「推荐其他关联文档」的中间件，不污染图谱节点。
 - **检索增强（RAG 原生）**：离线评分检索 + 最近邻 + 关系聚合（`kb_context`），直接聚合成可粘贴进 Agent 自身 prompt 的上下文文本。
 - **反馈邮箱**：引擎自检发现的问题（分类漂移 / 跨域同构 / 未形式化）经节流后右下角逐条弹窗 + 侧边收件箱呈现，且不污染文章正文。
@@ -21,18 +21,69 @@
 
 ## 界面预览
 
-<p align="center">
-  <img src="./docs/images/readme/ui-schematic.svg" width="100%" alt="灯笼界面结构示意：导航六视图 + 双尺度坐标地图 + 反馈邮箱。">
-</p>
+主图是界面结构**示意**（非截图）。工作台由五视图组成：
 
-主图是界面结构**示意**（非截图）。工作台由六视图组成：
+- **总览**：知识库健康度、领域分布、双尺独立性检验、灵感碎片统计。
+- **知识库**：按双尺度坐标浏览全部知识，支持检索与过滤、双击阅读。
+- **逻辑偏差**：双尺度坐标地图，红虚线为引擎发现的跨域候选边，是灯笼的标志性视图。
+- **知识图谱**：硬链（AI 织入）与软链（引擎发现）双来源叙事，可默认只铺节点、点选展开连线。
+- **灵感碎片**：无坐标的原料舱，随手记、关键词聚类、智能孵化成知识条目。
 
-- **总览**：知识库健康度、领域分布、独立性检验、双尺 provider 状态。
-- **知识库**：按双尺度坐标浏览全部知识，支持检索与过滤。
-- **游标偏差**：双尺度坐标地图，红虚线为引擎发现的跨域候选边，是灯笼的标志性视图。
-- **知识图谱**：硬链（作者意图）与软链（引擎发现）双来源叙事，可默认只铺节点、点选展开连线。
-- **阅读**：单条知识全文与本地镜像文件，支持在知识库内改写或回灌外部编辑。
-- **设置**：配置双尺 provider、碰撞阈值、领域带划分等「构成逻辑」。
+### 真实界面截图
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="./docs/shots/overview.png" width="100%" alt="总览视图截图"/><br>
+      <b>① 总览</b><br>
+      <sub>库的健康度、领域分布、双尺独立性检验与灵感碎片统计，一眼概览。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="./docs/shots/knowledge.png" width="100%" alt="知识库视图截图"/><br>
+      <b>② 知识库</b><br>
+      <sub>按双尺度坐标浏览全部知识，支持检索、过滤与双击阅读。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="./docs/shots/visualize.png" width="100%" alt="逻辑偏差·坐标地图截图"/><br>
+      <b>③ 逻辑偏差 · 坐标地图</b><br>
+      <sub>双尺度坐标地图，红虚线为引擎发现的跨域候选边，灯笼标志性视图。</sub>
+      <br><br>
+      <img src="./docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/><br>
+      <b>③ 偏差地图</b><br>
+      <sub>横轴领域、纵轴形式化读数；点相对「领域基准趋势线」的浮动表达偏离，偏差线连到基准线、不穿过它。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="./docs/shots/graph.png" width="100%" alt="知识图谱视图截图"/><br>
+      <b>④ 知识图谱</b><br>
+      <sub>硬链（AI 织入）与软链（引擎发现）双来源叙事，点选节点展开连线。</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="./docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/><br>
+      <b>⑤ 灵感碎片</b><br>
+      <sub>无坐标的原料舱：随手记、关键词聚类、智能孵化成知识条目。</sub>
+    </td>
+  </tr>
+</table>
+
+### 截图命名对照表
+
+| 文件名 | 对应视图 | 画面要点 |
+|--------|----------|----------|
+| `docs/shots/overview.png` | ① 总览 | 顶部指标卡 + 领域分布条 + 灵感碎片统计卡 |
+| `docs/shots/knowledge.png` | ② 知识库 | 双尺度坐标列表 + 过滤框 |
+| `docs/shots/visualize.png` | ③ 逻辑偏差·坐标地图 | 双尺度坐标地图 SVG（含红虚线跨域边） |
+| `docs/shots/visualize-deviation.png` | ③ 逻辑偏差·偏差地图 | 横轴领域、纵轴形式化读数的散点，点相对领域基准趋势线的偏离 |
+| `docs/shots/graph.png` | ④ 知识图谱 | 力导布局节点与连线 |
+| `docs/shots/sparks.png` | ⑤ 灵感碎片 | 原料舱卡片 + 聚类簇 |
+
+> 把截图按上表文件名放进 `docs/shots/`（同名替换即自动更新）。README 重新渲染时会直接显示，无需任何额外配置。
 
 ## 核心思想（一图速览）
 
@@ -42,24 +93,59 @@
 
 坐标语义详见 [`AGENTS.md`](AGENTS.md) 的「坐标语义 / 独立性守卫」章节。
 
+## 架构：分层与前后端分离
+
+灯笼刻意把**引擎、后端服务、前端**拆成三层，互不越界：
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  frontend/   前端（静态 SPA，纯展示窗）                          │
+│   index.html · theory.html · css/ · js/  —— 只通过 /api/* 取数  │
+└───────────────────────────┬──────────────────────────────────┘
+                              │  HTTP / REST（JSON）
+┌───────────────────────────┴──────────────────────────────────┐
+│  backend/    后端服务层（服务端 Python，仅标准库）               │
+│   server.py   薄传输层：HTTP 连接 / JSON / 静态托管 / 定时扫描   │
+│   routes.py   REST 路由表（method+path → handler，与传输解耦）   │
+│   kb.py       Agent 工具门面（29 个 kb_* 工具，REST/MCP/CLI 同源）│
+│   kb_cli.py   CLI 直连入口（无需服务在线，直读 lantern.db）      │
+│   mcp_server.py  MCP stdio 入口（server 名 lantern-kb）         │
+│   seed_demo.py   合成演示数据生成器                              │
+└───────────────────────────┬──────────────────────────────────┘
+                              │  import
+┌───────────────────────────┴──────────────────────────────────┐
+│  lantern_caliper/   引擎（核心业务逻辑，纯数据职能）             │
+│   items / links / graph / concepts / measure / feedback /       │
+│   schema / sparks / articles / audit / summarize / guard / core │
+│  llm.py            LLM provider 封装（引擎依赖，留仓库根）        │
+│  lantern.db        SQLite 单一真相源                             │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**三条铁律**：① 前端绝不碰业务逻辑，只消费 REST；② 引擎只管数据职能（定位/检索/关系），不依赖 web/服务；③ 后端服务层是引擎与三通道（REST/MCP/CLI）之间的薄壳，所有能力经 `kb.py` 同一份 `TOOLS`/`dispatch` 暴露，三通道行为完全一致。
+
 ## 目录结构
 
 ```text
 lantern-caliper/
-├── lantern_caliper/   # 后端引擎包（双尺度定位 / 检索 / 图谱 / 概念层 / 守卫 / 反馈）
-├── web/               # 前端静态资源（index.html / theory.html / css / js）
-├── docs/              # 文档与配图
-├── schema.json        # 「构成逻辑」配置：领域带 / 阈值 / 独立性 / 概念层
-├── server.py          # HTTP 服务（REST + 静态前端），默认 127.0.0.1:8731
-├── kb.py              # Agent 工具层（29 个 kb_* 工具，REST / MCP / Skill 同源）
-├── mcp_server.py      # MCP stdio 服务入口（server 名 lantern-kb）
-├── kb_cli.py          # 命令行直连入口（无需服务在线，直接读 lantern.db）
-├── llm.py             # 大模型 provider 封装（断路 / 缓存 / 输入互补切分）
-├── seed_demo.py       # 生成合成演示数据（绝不入库真实个人数据）
-├── README.md          # 本文件
-├── AGENTS.md          # Agent 接口规范（工具清单 / 三通道 / 坐标语义）
-├── LICENSE            # MIT
-├── .env.example       # 大模型凭据模板（真实 .env 已被 .gitignore 排除）
+├── backend/            # 后端服务层（服务端 Python）
+│   ├── server.py       # HTTP 服务：REST 传输层 + 静态前端托管（默认 127.0.0.1:8731）
+│   ├── routes.py       # REST 路由表与 handler（与传输层解耦）
+│   ├── kb.py           # Agent 工具门面（29 个 kb_* 工具，REST/MCP/CLI 同源）
+│   ├── kb_cli.py       # 命令行直连入口（无需服务在线，直接读 lantern.db）
+│   ├── mcp_server.py   # MCP stdio 服务入口（server 名 lantern-kb）
+│   └── seed_demo.py    # 生成合成演示数据（绝不入库真实个人数据）
+├── frontend/           # 前端（静态 SPA）：index.html / theory.html / css / js
+├── lantern_caliper/    # 引擎（双尺度定位 / 检索 / 图谱 / 概念层 / 守卫 / 反馈）
+├── llm.py              # 大模型 provider 封装（断路 / 缓存 / 输入互补切分）
+├── schema.json         # 「构成逻辑」配置：领域带 / 阈值 / 独立性 / 概念层
+├── articles/           # 知识库的可读 Markdown 镜像（与 DB 双向同步）
+├── docs/               # 文档与配图
+├── skills/             # 配套 Agent Skills（lantern-kb / lantern-method）
+├── README.md           # 本文件
+├── AGENTS.md           # Agent 接口规范（工具清单 / 三通道 / 坐标语义）
+├── LICENSE             # MIT
+├── .env.example        # 大模型凭据模板（真实 .env 已被 .gitignore 排除）
 └── .gitignore
 ```
 
@@ -69,16 +155,81 @@ lantern-caliper/
 
 ```bash
 # 1) 生成演示库（首次或重置；合成数据，无个人信息）
-python seed_demo.py            # 库不存在时自动生成 9 条演示知识
-python seed_demo.py --force    # 清空并重建一份干净的演示数据
+python backend/seed_demo.py            # 库不存在时自动生成 9 条演示知识
+python backend/seed_demo.py --force    # 清空并重建一份干净的演示数据
 
-# 2) 启动服务
-python server.py               # 监听 http://127.0.0.1:8731/
+# 2) 启动服务（后端 HTTP 服务 + 静态前端托管）
+python backend/server.py               # 监听 http://127.0.0.1:8731/
 ```
 
-打开浏览器访问 `http://127.0.0.1:8731/` 即可。若 `lantern.db` 不存在，服务首次启动也会自动建库并种入演示数据，因此只跑 `python server.py` 也能直接体验。
+打开浏览器访问 `http://127.0.0.1:8731/` 即可。若 `lantern.db` 不存在，服务首次启动也会自动建库并种入演示数据，因此只跑 `python backend/server.py` 也能直接体验。
 
 > 要求 Python 3.10+。不配置大模型时，双尺定位走本地启发式，全功能可用。
+
+## REST API 契约
+
+所有接口以 JSON 通信，基址 `http://127.0.0.1:8731`。知识库能力统一为
+`POST /api/kb/<tool>`（请求体 JSON），所有 `kb_*` 工具名与 [`AGENTS.md`](AGENTS.md) 一一对应；
+另有若干只读/辅助端点供前端轮询。路由表集中在 `backend/routes.py`，与传输层解耦。
+
+### 系统 / 引擎状态（GET）
+| 端点 | 说明 |
+|------|------|
+| `/api/schema` | 「构成逻辑」快照（领域带 / 阈值 / 模式 / 独立性 / 概念层） |
+| `/api/state` | 工作台总览（条目 / 边 / 独立性 / 信号 / 健康度 / provider） |
+| `/api/llm` | 大模型 provider 状态 |
+| `/api/isolation` | 两尺输入互补切分演示（`?text=`） |
+| `/api/edges` | 候选跨学科边列表 |
+| `/api/logs` | 引擎日志 |
+| `/api/independence` | 两尺独立性检验 |
+| `/api/audit-log` | 审计日志与统计 |
+| `/api/audit-log/purge` (POST) | 清理 N 天前的审计日志（`keep_days`） |
+
+### 反馈收件箱
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/feedback` | GET | 未读数与反馈列表（`?status=`） |
+| `/api/feedback/read` | POST | 标记已读（`id`） |
+| `/api/feedback/applied` | POST | 标记已应用（`id`） |
+| `/api/feedback/dismiss` | POST | 忽略（`id`） |
+| `/api/feedback/delete` | POST | 删除（`id`） |
+| `/api/feedback/clear` | POST | 清空全部 |
+| `/api/feedback/not_duplicate` | POST | 标记非重复对（`a`,`b`） |
+| `/api/feedback/apply` | POST | 生成修订稿（`id`，不落库，前端 diff 确认） |
+
+### 灵感碎片（原料层）
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/sparks` | GET | 列出碎片（`?status=`） |
+| `/api/sparks` | POST | 新增碎片（`content` 必填，`title`/`tags` 可选） |
+| `/api/sparks/clusters` | GET | 关键词共现聚类 |
+| `/api/hatch/stats` | GET | 孵化事件统计 |
+| `/api/sparks/<id>/hatch` | POST | 智能孵化（六阶段管线） |
+| `/api/sparks/<id>/draft` | POST | 生成碰撞创作草稿（不落库） |
+| `/api/sparks/<id>/commit` | POST | 确认草稿入库 |
+| `/api/sparks/<id>/update` | POST | 改内容 / 标题 / 标签 |
+| `/api/sparks/<id>/delete` | POST | 删除碎片 |
+
+### 软链（引擎发现）确认 / 刷新
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/soft-link/confirm` | POST | 确认一条软链为硬链（`src_id`,`dst_id`） |
+| `/api/soft-link/dismiss` | POST | 驳回一条软链 |
+| `/api/soft-links/refresh` | POST | 重新跑全库关联发现并接入图谱 |
+
+### 知识库（kb，POST `/api/kb/<tool>`）
+`query` · `retrieve` · `fragments` · `neighbors` · `linked_neighbors` · `search` · `position` ·
+`similar` · `suggest_links` · `relate` · `context` · `traverse` · `axes` · `backlinks` ·
+`article`(GET) · `add` · `update` · `reload` · `delete` · `link` · `unlink` ·
+`import` · `import_axes` · `embed_rebuild` · `backup` · `create_draft` · `state` · `schema` ·
+`config`(GET) · `config_set`(POST) · `config_test`(POST) · `calibrate` · `mode`(GET/POST) ·
+`edges`(GET) · `consolidate`(POST) · `concept_neighbors`(GET)
+
+### 图谱 / 概念
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/graph` | GET | 知识图谱（节点 + 边，硬链/`[[...]]` + 软链） |
+| `/api/concepts` | GET | 派生概念节点列表 |
 
 ## 接入自己的知识库
 
@@ -93,24 +244,24 @@ python server.py               # 监听 http://127.0.0.1:8731/
 
 让 Agent 把本知识库当成自带可调用的工具，在任意对话里联合使用：
 
-- **`lantern-kb`**：知识库的薄壳 Skill，封装 `kb.py` 的 29 个工具，经 `kb_cli.py` 直接调用，无需服务在线。详见 [`AGENTS.md`](AGENTS.md)。
+- **`lantern-kb`**：知识库的薄壳 Skill，封装 `backend/kb.py` 的 29 个工具，经 `backend/kb_cli.py` 直接调用，无需服务在线。详见 [`AGENTS.md`](AGENTS.md)。
 - **`lantern-method`**：多维轴认知方法 Skill，把对某个概念的理解通过多轴投影、冗余检查、反馈轴拆解成结构化知识条目，并编排写回本知识库。
 
 把这两个 Skill 的地址交给你的 Agent 即可安装使用；安装方式、平台支持与执行边界以 Skill 仓库为准。
 
 ### 三通道等价调用
 
-任何 Agent 都可通过**三条等价通道**调用同一套能力（共享 `kb.py` 的同一份 `TOOLS` 与 `dispatch`）：
+任何 Agent 都可通过**三条等价通道**调用同一套能力（共享 `backend/kb.py` 的同一份 `TOOLS` 与 `dispatch`）：
 
 | 通道 | 适用对象 | 接入方式 |
 |------|----------|----------|
-| **REST** | HTTP 型 Agent / 脚本 / 浏览器 | `http://127.0.0.1:8731/api/kb/*`（先启动 `server.py`） |
-| **MCP** | 支持 Model Context Protocol 的 Agent（Claude Desktop / Cursor / 框架） | `mcp_server.py`，server 名 `lantern-kb` |
-| **Skill + CLI** | WorkBuddy 等自带工具链的 Agent | 安装 `lantern-kb` Skill，经 `kb_cli.py` 直连 |
+| **REST** | HTTP 型 Agent / 脚本 / 浏览器 | `http://127.0.0.1:8731/api/kb/*`（先 `python backend/server.py`） |
+| **MCP** | 支持 Model Context Protocol 的 Agent（Claude Desktop / Cursor / 框架） | `backend/mcp_server.py`，server 名 `lantern-kb` |
+| **Skill + CLI** | WorkBuddy 等自带工具链的 Agent | 安装 `lantern-kb` Skill，经 `backend/kb_cli.py` 直连 |
 
 ## 示例与隐私
 
-`seed_demo.py` 生成的演示知识（诗词、数学、进化论、经济、法律、物理、哲学、神经科学、量子等样例）全部是从零编写的**合成数据**，不来自任何真实个人。
+`backend/seed_demo.py` 生成的演示知识（诗词、数学、进化论、经济、法律、物理、哲学、神经科学、量子等样例）全部是从零编写的**合成数据**，不来自任何真实个人。
 
 公开前已通过 `.gitignore` 把所有个人数据、凭据与运行时产物排除：
 

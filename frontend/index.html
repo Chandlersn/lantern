@@ -18,7 +18,7 @@
     </div>
     <nav id="nav">
       <a data-view="overview" class="active">总览<span class="badge ghost" id="navTotal">0</span></a>
-      <a data-view="sparks">灵感碎片</a>
+      <a data-view="sparks">灵感碎片<span class="badge ghost" id="navSparks">0</span></a>
       <a data-view="knowledge">知识库<span class="badge ghost" id="navItems">0</span></a>
       <a data-view="reader">阅读</a>
       <a data-view="visualize">逻辑偏差</a>
@@ -56,6 +56,14 @@
             <h3>知识分布 <span class="muted" id="ovBandCount"></span></h3>
             <p class="desc">各领域各有多少条，一眼看清库的构成。</p>
             <div id="ovBands"></div>
+          </div>
+        </div>
+        <div class="card" id="ovSparks" style="margin-top:18px;">
+          <h3>灵感碎片 <span class="muted" id="ovSparkTotal"></span></h3>
+          <p class="desc">随手记下来的想法原料，刻意不上坐标；投影发生在「孵化」。状态拆解：原料（待孵化）/ 孵化中 / 已孵化（已长成知识条目）。点「去灵感碎片页」可查看、编辑或孵化。</p>
+          <div id="ovSparkStats" class="ov-spark-stats"></div>
+          <div class="row end" style="margin-top:10px;">
+            <button class="soft" id="ovSparkGo">去灵感碎片页</button>
           </div>
         </div>
       </section>
@@ -158,19 +166,19 @@
           <div id="rdLinkModal" class="rd-link-modal" aria-hidden="true">
             <div class="rd-link-panel" role="dialog" aria-modal="true" aria-label="插入互链">
               <div class="rd-link-head">
-                <span>插入互链 · 手写 [[...]] 双链</span>
+                <span>插入互链 · [[...]] 双链标记</span>
                 <button class="rd-link-close" id="rdLinkClose" type="button" title="关闭">✕</button>
               </div>
               <input id="rdLinkSearch" type="text" placeholder="搜索条目标题…" autocomplete="off">
               <div id="rdLinkList" class="rd-link-list"></div>
-              <p class="rd-link-hint">选择条目后会在正文光标处插入 [[标题]]；保存即成为作者意图的硬链（图谱蓝实线）。</p>
+              <p class="rd-link-hint">选择条目后会在正文光标处插入 [[标题]]；保存即写入知识库，成为确定性互链（图谱蓝实线）。</p>
             </div>
           </div>
         </div>
         <div class="note">这条知识同时存在于本地数据库和 <code>articles/&lt;编号&gt;.md</code> 文件，两边改了都能同步。</div>
         <div class="card">
           <h2>关联</h2>
-          <p class="desc">「引用 / 被引用」只统计你正文里手写的 <code>[[...]]</code> 双链，是有事实依据的硬关系；下面的「相邻知识」由智能助手按内容自动发现（跨主题桥接 / 共现）。语义相似因嵌入暂不可信已暂停生成，仅供参考、点开看依据，<b>不代表真有引用关系</b>。</p>
+          <p class="desc">「互链」列出条目间的确定性关联（正文 [[...]] 显式引用，图谱蓝实线），由智能助手在加工知识库时自动织入；下面的「相邻知识」由智能助手按内容自动发现（跨主题桥接 / 共现 / 语义相似）。</p>
           <div id="rdTags" style="margin-bottom:8px;"></div>
           <div id="rdLinks" style="margin-bottom:8px;"></div>
           <label style="font-size:11px;">相邻知识 · 引擎自动发现（相似 / 桥接 / 共现，仅供参考，点开看依据，点条目跳阅读页）</label>
@@ -228,7 +236,7 @@
             <h3>图例</h3>
             <div class="graph-legend">
               <div id="gLegendDomains"></div>
-              <div class="lg"><span class="ln" style="border-top-color:#3A5A8C"></span>互链（你写的，实线）</div>
+              <div class="lg"><span class="ln" style="border-top-color:#3A5A8C"></span>互链（AI 织入，实线）</div>
               <div class="lg"><span class="ln" style="border-top-color:#2f6b34"></span>引擎发现（共现，绿实线，自动接入）</div>
               <div class="lg"><span class="ln dash" style="border-top-color:#9a968c"></span>引擎推测·存疑（语义相似，灰细点线，嵌入暂不可信、已暂停生成）</div>
               <div class="lg"><span class="ln dash" style="border-top-color:#B5482F"></span>引擎桥接（跨主题，朱砂虚线，自动接入）</div>

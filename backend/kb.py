@@ -24,6 +24,13 @@ import os
 import re
 import time
 
+import os as _os
+import sys
+# kb.py 已迁入 backend/ 子目录：引擎包 lantern_caliper 位于仓库根，需把仓库根注入 sys.path
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
 import lantern_caliper as store
 
 _SPLIT = re.compile(r"[\s，。；、,.;!?！？：:（）()\[\]【】\n\t]+")

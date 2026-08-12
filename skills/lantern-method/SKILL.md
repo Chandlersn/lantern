@@ -16,7 +16,7 @@ agent_created: true
 - 产出最终要入库；可检索、无冗余，比深度更重要。
 - 每次分析只跑一轮，不做多轮迭代。
 
-> 引擎脚本 `scripts/lantern_method.py` 与本文件同级，会自动从仓库根定位知识库（含 `kb.py` 的目录）；也可用环境变量 `LANTERN_KB_DIR` 显式指定。
+> 引擎脚本 `scripts/lantern_method.py` 与本文件同级，会自动从仓库根（或 `backend/`）定位知识库（`kb.py` 所在目录）；也可用环境变量 `LANTERN_KB_DIR` 显式指定。
 
 ---
 

@@ -15,14 +15,14 @@ agent_created: true
 
 ## 调用方式
 
-本 Skill 通过 `scripts/lantern_kb.py` 原样转发到仓库根的 `kb_cli.py`（后者自行切换目录、直读 `lantern.db`，**不依赖 server.py 在线**）：
+本 Skill 通过 `scripts/lantern_kb.py` 原样转发到 `backend/` 下的 `kb_cli.py`（后者自行切换目录到仓库根、直读 `lantern.db`，**不依赖 backend/server.py 在线**）：
 
 ```bash
 python scripts/lantern_kb.py <tool> '<json-args>'
 python scripts/lantern_kb.py list          # 列出全部 29 个工具
 ```
 
-可用环境变量 `LANTERN_KB_DIR` 显式指定仓库根（含 `kb_cli.py` 的目录）；否则脚本从本 Skill 位置相对回溯到仓库根自动定位。
+可用环境变量 `LANTERN_KB_DIR` 显式指定仓库根（含 `backend/kb_cli.py` 的目录）；否则脚本从本 Skill 位置相对回溯到仓库根自动定位。
 
 ## 工具总览（29 个，与 REST / MCP 同源）
 

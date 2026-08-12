@@ -8,12 +8,24 @@ function fillVizList(filter){
     if(!q) return true;
     return (`${i.title||''} ${i.band||''} ${i.axis_domain||''}`).toLowerCase().includes(q);
   });
-  if(!items.length){ box.innerHTML = '<div class="viz-empty">没有匹配的条目</div>'; return; }
+  if(!items.length){ box.innerHTML = '<div class="viz-empty">没有匹配的条目</div>'; box.style.maxHeight=''; return; }
   box.innerHTML = items.map(i=>
     `<div class="viz-item${i.id===curId?' on':''}" data-id="${i.id}" title="${esc(i.title)}">
        <span class="viz-title">${esc(i.title)}</span>
        <span class="tag">${esc(i.band||'—')}</span>
      </div>`).join('');
+  capVizList(box);
+}
+
+// 两项判断条目列表：默认只露 7 行，多余靠滚轮滚动（按真实行高精确裁切，不因字体度量猜测）
+const VIZ_LIST_CAP = 7;
+function capVizList(box){
+  if(!box) return;
+  const rows = box.querySelectorAll('.viz-item');
+  if(rows.length <= VIZ_LIST_CAP){ box.style.maxHeight=''; return; }
+  const h = rows[0].getBoundingClientRect().height;     // 单行高度（含自身盒）
+  const pad = parseFloat(getComputedStyle(box).paddingTop) + parseFloat(getComputedStyle(box).paddingBottom);
+  box.style.maxHeight = (h * VIZ_LIST_CAP + pad) + 'px';
 }
 // 旧搜索「相似」用的条目下拉已随面板删除；此处仅保留对可视化面板的副作用（填充 vList），并对缺失元素空安全。
 function fillItemSelects(){

@@ -18,6 +18,9 @@ llm_cache.db
 articles/*.md
 articles/**/*.md
 
+# ---- 本地主尺定义（user 本地校准，不入库）----
+main_scale_definition.json
+
 # ---- 运行时 / 日志 ----
 server.log
 __pycache__/

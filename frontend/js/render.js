@@ -23,7 +23,7 @@ function renderBeams(boxId, readId, it){
     .map(([v,l])=>`<text x="${X(v)}" y="248" font-size="10" fill="#9a968c" text-anchor="middle">${l}</text>`).join('');
   const refLabel = '领域基准' + (it.band_count!=null && it.band_count<2 ? '（样本少）' : '');
   const expTick=`<line x1="${eX}" y1="206" x2="${eX}" y2="230" stroke="#888780" stroke-width="1.5" stroke-dasharray="3 3"/>
-    <text x="${eX}" y="242" font-size="10.5" fill="#888780" text-anchor="middle">${refLabel} ${it.typical}</text>`;
+    <text x="${eX}" y="233" font-size="10.5" fill="#888780" text-anchor="middle">${refLabel} ${it.typical}</text>`;
   const actTick=`<line x1="${vX}" y1="168" x2="${vX}" y2="206" stroke="#B5302A" stroke-width="2.5"/>
     <circle cx="${vX}" cy="168" r="4.5" fill="#B5302A"/>
     <text x="${vX}" y="160" font-size="11" fill="#B5302A" text-anchor="middle">${it.vernier}</text>`;
@@ -36,18 +36,18 @@ function renderBeams(boxId, readId, it){
     <text x="34" y="152" font-size="13.5" font-weight="500" fill="#23201C">形式化读数</text>
     ${bands}${mainTick}${beam}${ticks}${anchors}${gap}${expTick}${actTick}${badge}
     <g font-size="11" fill="#23201C">
-      <rect x="${x0}" y="288" width="12" height="12" fill="#23201C"/><text x="${x0+17}" y="298">领域</text>
-      <rect x="${x0+120}" y="288" width="12" height="12" fill="#B5302A"/><text x="${x0+137}" y="298">形式化读数</text>
-      <rect x="${x0+240}" y="288" width="12" height="12" fill="#888780"/><text x="${x0+257}" y="298">领域平均线</text>
+      <rect x="${x0+398}" y="288" width="12" height="12" fill="#23201C"/><text x="${x0+415}" y="298">领域</text>
+      <rect x="${x0+449}" y="288" width="12" height="12" fill="#B5302A"/><text x="${x0+466}" y="298">形式化读数</text>
+      <rect x="${x0+542}" y="288" width="12" height="12" fill="#888780"/><text x="${x0+559}" y="298">领域平均线</text>
     </g></svg>`;
   $(readId).innerHTML =
     `<span class="pill">领域 ${it.band}</span>`+
     `<span class="pill">位置 ${it.main_pos}${it.revised?' · 已调整':''}</span>`+
-    `<span class="pill">把握 ${it.main_conf}</span>`+
+    `<span class="pill" title="系统对这条内容落在哪个领域 / 谱系位置的把握程度（主尺读数置信度，0–100%）">归类把握 ${Math.round((it.main_conf||0)*100)}%</span>`+
     `<span class="pill">形式化 ${it.vernier}</span>`+
     `<span class="pill">${it.band_count!=null && it.band_count<2 ? '领域基准（样本少）' : '领域基准'} ${it.typical}</span>`+
     `<span class="pill>偏差 ${it.offset>0?'+':''}${it.offset}</span>`+
-    (it.main_conf<0.35?`<span class="pill hot">把握较低 · 可能是跨领域内容</span>`:'');
+    (it.main_conf<0.35?`<span class="pill hot">归类把握较低 · 可能是跨领域内容</span>`:'');
 }
 
 function renderMap(){

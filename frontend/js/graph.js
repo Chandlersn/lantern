@@ -24,6 +24,16 @@ function nodeRadius(n){
   const d = Math.max(0, (n.degree||0));
   return Math.min(19, 6 + Math.sqrt(d) * 2.0);   // 节点大小 = 连接数（度）
 }
+// 方向说明：只描述「这 N 根可见链条」的方向性质，绝不作为额外计数出现，
+// 避免「连接 2 却出链 2 + 入链 2」暗示 4 根线的视觉歧义（双向互链时出/入是同一批线）。
+function graphDirText(n){
+  const d=n.degree||0, o=n.outDegree||0, i=n.inDegree||0;
+  if(d===0) return '暂无连线';
+  if(o===i && o===d) return '↔ 全部双向互链';          // 出/入重合 = 同一批线，够清楚就不拆数字
+  if(o>0 && i===0)   return '→ 仅主动引用 '+o+' 篇';
+  if(i>0 && o===0)   return '← 仅被引用 '+i+' 篇';
+  return '→ 出 '+o+' · ← 入 '+i;                        // 混合：有单向线，箭头明确是方向非连接数
+}
 function graphBuildData(data){
   const keepSel = GV ? GV.selectedNode : null;
   const keepEdge = GV ? GV.selectedEdge : null;
@@ -144,7 +154,7 @@ function graphPaint(){
     const a=GV.nodes[ed.source], b=GV.nodes[ed.target]; if(!a||!b) return;
     if(edgeDim(ed)) return;   // 默认隐藏连线；仅选中节点的入射边展开显示
     let col='#CFC6B2', w=2, dash='';
-    if(ed.kind==='hard'){ col='#3A5A8C'; w=2; }                       // 作者互链（蓝实线）
+    if(ed.kind==='hard'){ col='#3A5A8C'; w=2; }                       // AI 织入互链（蓝实线）
     else if(ed.kind==='soft'){
       if(ed.provenance==='bridge'){ col='#B5482F'; w=2; dash='stroke-dasharray="7 5"'; }  // 引擎桥接（朱砂虚线，跨主题）
       else if(ed.provenance==='semantic'){ col='#2f6b34'; w=2; }  // 引擎语义关联（绿实线；仅信号 healthy 时写入=引擎确认的关联）
@@ -274,9 +284,8 @@ async function graphSelectNode(id){
     + (summary?`<div class="det-row det-summary">${esc(summary)}</div>`:'')
     + (tags?`<div class="det-tags">${tags}</div>`:'')
     + `<div class="det-stats">`
-    +   `<div><b>${n.degree}</b><span>连接</span></div>`
-    +   `<div><b>${n.outDegree}</b><span>出链</span></div>`
-    +   `<div><b>${n.inDegree}</b><span>入链</span></div>`
+    +   `<div class="det-stat-main"><b>${n.degree}</b><span>连接</span></div>`
+    +   `<div class="det-stat-dir">${graphDirText(n)}</div>`
     + `</div>`
     + `<div class="det-actions"><button class="soft" id="gOpen">打开阅读</button></div>`;
   if(neighbors.length){
@@ -284,9 +293,9 @@ async function graphSelectNode(id){
       const kinds=new Set(x.edges.map(g=>g.e.kind));
       const provs=new Set(x.edges.map(g=>g.e.provenance));
       const dirs =new Set(x.edges.map(g=>g.dir));
-      // 关系标签：优先取最强的一类（作者互链 > 引擎语义/桥接 > 共现）
+      // 关系标签：优先取最强的一类（AI 织入互链 > 引擎语义/桥接 > 共现）
       let tag, cls='';
-      if(kinds.has('hard')){ tag='互链（你写的）'; }
+      if(kinds.has('hard')){ tag='互链（AI 织入）'; }
       else if(provs.has('semantic')){ tag='引擎语义关联'; cls='col'; }
       else if(provs.has('bridge')){ tag='桥接（跨主题）'; cls='col'; }
       else { tag='关键词共现'; cls='col'; }
@@ -338,9 +347,9 @@ function graphSelectEdge(id){
   GV.selectedNode=null; GV.selectedEdge=id;
   const ed=GV.edges.find(e=>e.id===id); if(!ed) return;
   const a=GV.nodes[ed.source], b=GV.nodes[ed.target];
-  // B · 双来源叙事：明确这条边是「作者意图」还是「引擎发现」，以及引擎用的哪种信号
+  // B · 双来源叙事：明确这条边是「AI 织入」还是「引擎发现」，以及引擎用的哪种信号
   let srcTxt, tag;
-  if(ed.kind==='hard'){ srcTxt='作者互链（正文 [[...]] 显式引用）'; tag='作者意图'; }
+  if(ed.kind==='hard'){ srcTxt='AI 互链（技能织入 [[...]] 显式引用）'; tag='AI 织入'; }
   else if(ed.kind==='unresolved'){ srcTxt='提到了但还没写'; tag='待补写'; }
   else if(ed.provenance==='semantic'){ srcTxt='引擎语义关联（嵌入相似度高，信号已恢复可信）'; tag='引擎·语义'; }
   else if(ed.provenance==='bridge'){ srcTxt='跨主题桥接（分属不同学科带，但共享核心概念词，引擎自动发现）'; tag='引擎·桥接'; }

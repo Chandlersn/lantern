@@ -3,22 +3,25 @@
 """灯笼 · 多维轴知识库 —— 命令行入口（供 agent / 脚本 / 人类直接调用）
 
 用法：
-    python kb_cli.py <tool> '<json-args>'
+    python backend/kb_cli.py <tool> '<json-args>'
 示例：
-    python kb_cli.py kb_state
-    python kb_cli.py kb_query '{"text":"不完备 形式系统"}'
-    python kb_cli.py kb_context '{"query":"哥德尔 不完备","top_k":3}'
+    python backend/kb_cli.py kb_state
+    python backend/kb_cli.py kb_query '{"text":"不完备 形式系统"}'
+    python backend/kb_cli.py kb_context '{"query":"哥德尔 不完备","top_k":3}'
 
 所有 kb.py 的 TOOLS（13 个）均可通过此入口调用，输出 JSON（ensure_ascii=False）。
-调用前会切换到脚本所在目录，以保证 lantern.db / .env 等相对路径被正确解析。
+调用前会切换到仓库根目录，以保证 lantern.db / .env 等相对路径被正确解析。
 """
 import sys
 import os
 import json
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-os.chdir(HERE)
+ROOT = os.path.dirname(HERE)          # 仓库根（backend/ 的父目录）
+os.chdir(ROOT)                        # 切到仓库根，确保 lantern.db / .env 相对路径正确解析
 sys.path.insert(0, HERE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 import kb  # noqa: E402
 

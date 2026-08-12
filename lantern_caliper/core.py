@@ -1,20 +1,5 @@
 # -*- coding: utf-8 -*-
-"""灯笼 · 多维轴知识库 —— 核心持久化层（连接 / 迁移 / 元信息 / 快照 / 阈值与模式 / 调试）。"""
-
-import json
-import os
-import re
-import sqlite3
-import time
-import concurrent.futures
-import threading
-import sys
-
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-灯笼 · 多维轴知识库 · 游标卡尺 —— 持久化与度量层
-仅使用 Python 标准库（sqlite3 / json / re / math），贴合灯笼框架技术栈。
+"""灯笼 · 多维轴知识库 —— 核心持久化层（连接 / 迁移 / 元信息 / 快照 / 阈值与模式 / 调试）。
 
 设计要点：
   1. 双尺读数分行存入 readings 表，各带 provider 与 signal_family（语义标签）。

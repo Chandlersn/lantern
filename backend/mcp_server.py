@@ -20,7 +20,10 @@ import os
 import sys
 
 BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(BASE)          # 仓库根（backend/ 的父目录）
 sys.path.insert(0, BASE)
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 import lantern_caliper as store
 import kb

@@ -3,6 +3,7 @@
 
 import json
 import math
+from collections import defaultdict
 
 def detect_health(sim_threshold=0.90):
     """E2 · 健康自检：用高余弦找近重复 / 高耦合条目对（疑似冗余），
@@ -96,6 +97,11 @@ def build_graph():
     # 概念不再作为图谱节点：concepts / concept_links 是后端被动存储的「概念↔文档」列表，
     # 只通过 concept_neighbors() 给文档做桥接推荐（在节点详情页展示），不混入图谱布局。
     edges = []
+    # 用集合按「去重邻居」统计，避免双向硬链 / 硬链+软链并存时把同一邻居重复计数：
+    #   degree     = 去重后的关联节点总数（硬链+软链都算，与前端「相邻知识」列表一致）
+    #   outDegree  = 以本节点为硬链源的去重邻居（受 UNIQUE(src,dst,kind) 约束天然去重）
+    #   inDegree   = 以本节点为硬链目标的去重邻居
+    out_set, in_set, deg_set = defaultdict(set), defaultdict(set), defaultdict(set)
     for l in links:
         s, d = l["src_item_id"], l["dst_item_id"]
         if s not in node_map or d not in node_map:
@@ -110,10 +116,12 @@ def build_graph():
         # 软链（语义/共现/桥接）是对称关系，source/target 顺序任意，不能计入出/入方向，
         # 否则会把引擎的对称关联强加一个不存在的「谁引用谁」。
         if l["kind"] == "hard":
-            node_map[s]["outDegree"] += 1
-            node_map[d]["inDegree"] += 1
-        node_map[s]["degree"] += 1
-        node_map[d]["degree"] += 1
+            out_set[s].add(d); in_set[d].add(s)
+        deg_set[s].add(d); deg_set[d].add(s)
+    for nid, n in node_map.items():
+        n["degree"] = len(deg_set.get(nid, ()))
+        n["outDegree"] = len(out_set.get(nid, ()))
+        n["inDegree"] = len(in_set.get(nid, ()))
     connected = {s for e in edges for s in (e["source"], e["target"])}
     isolated = [n["id"] for n in node_map.values() if n["id"] not in connected]
     return {

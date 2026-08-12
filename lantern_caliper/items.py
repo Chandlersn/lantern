@@ -40,6 +40,15 @@ def _row_to_item(con, row, threshold, doms=None, global_typical=None):
     r = {x["scale"]: x for x in con.execute(
         "SELECT * FROM readings WHERE item_id=?", (row["id"],))}
     main, vern = r.get("main"), r.get("vernier")
+    # 容错：个别条目可能因守卫拉闸 / 迁移中途 / 手动裸录入而缺读数。
+    # 缺则安全兜底，避免 list_items / refresh_soft_links 因一条不完整数据
+    # 全盘崩溃（崩溃会被服务端 sweeper 的 except 静默吞掉，自动核对形同虚设）。
+    if main is None:
+        main = {"label": "未分类", "value": 50.0, "confidence": 0.5,
+                "provider": "none", "signal_family": "none", "revised": 0}
+    if vern is None:
+        vern = {"value": 45.0, "confidence": 0.0,
+                "provider": "none", "signal_family": "none", "revised": 0}
     band_name = (main["label"] or "").strip() or "未分类"
     if doms is None:
         doms = {d["name"]: d for d in list_domains()}

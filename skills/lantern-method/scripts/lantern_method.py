@@ -68,6 +68,7 @@ def _default_kb_dir():
         # env 可能直接指向含 kb.py 的目录，也可能指向一个内含 lantern-caliper 副本的父目录。
         # 两种都接受，避免「env 指向副本却因缺 kb.py 而静默回退真实库」的 footgun。
         for cand in (os.path.normpath(env),
+                     os.path.normpath(os.path.join(env, "backend")),
                      os.path.normpath(os.path.join(env, "lantern-caliper"))):
             if os.path.isfile(os.path.join(cand, "kb.py")):
                 return cand
@@ -75,7 +76,8 @@ def _default_kb_dir():
     here = os.path.dirname(os.path.abspath(__file__))
     # here = <repo>/skills/lantern-method/scripts → 仓库根 = here/../../..
     candidates = [
-        os.path.normpath(os.path.join(here, "..", "..", "..")),            # <repo>/（含 kb.py）
+        os.path.normpath(os.path.join(here, "..", "..", "..")),            # <repo>/（旧位置 kb.py）
+        os.path.normpath(os.path.join(here, "..", "..", "..", "backend")), # <repo>/backend/（重构后 kb.py）
         os.path.normpath(os.path.join(here, "..", "..", "..", "lantern-caliper")),
     ]
     for c in candidates:

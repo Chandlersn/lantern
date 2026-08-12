@@ -4,6 +4,7 @@
 
 本脚本是 `lantern-kb` Skill 的入口：定位仓库根下的 `kb_cli.py` 并原样转发参数。
 `kb_cli.py` 会自行切换到仓库根，直接读取 `lantern.db`，**无需 server.py 在线**。
+（后端 Python 已统一迁入 backend/ 子目录，故优先在 backend/ 下查找。）
 
 用法：
     python lantern_kb.py <tool> '<json-args>'
@@ -23,9 +24,12 @@ def main():
         os.path.join(here, "..", "..", ".."))
     kb_cli = os.path.join(repo, "kb_cli.py")
     if not os.path.isfile(kb_cli):
-        alt = os.path.join(repo, "lantern-caliper", "kb_cli.py")
-        if os.path.isfile(alt):
-            kb_cli = alt
+        # 后端 Python 已统一迁入 backend/ 子目录；旧副本位置作为回退
+        for cand in (os.path.join(repo, "backend", "kb_cli.py"),
+                     os.path.join(repo, "lantern-caliper", "kb_cli.py")):
+            if os.path.isfile(cand):
+                kb_cli = cand
+                break
     if not os.path.isfile(kb_cli):
         sys.stderr.write(
             f"找不到 kb_cli.py：已尝试 {kb_cli}\n"

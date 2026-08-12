@@ -107,6 +107,7 @@ function bindSparkCards(){
 // 碰撞创作草稿编辑器：孵化阶段一返回的 proposal 在此内联渲染，用户可微调正文/标题，
 // 点「确认入库」调 /commit 走阶段二（六阶段落地）；取消则恢复原卡片。
 function renderDraftEditor(card, r){
+  window.__lastSparkAnalysis = (r && r.analysis) || "";
   const merged = r.decision === 'merged';
   const rel = (r.related_items || []).map(it =>
     `<li><b>#${it.id}</b> ${esc(it.title || '')} <span class="muted">· 相关度 ${it.score}</span>
@@ -122,6 +123,7 @@ function renderDraftEditor(card, r){
       <div class="sp-draft-meta">${mergeNote}</div>
       ${terms ? `<div class="sp-tags" style="margin-top:4px;">来源簇主题：${terms}</div>` : ''}
       ${rel ? `<details class="sp-rel"><summary>知识库相关素材（${r.related_items.length}）</summary><ul class="sp-rel-list">${rel}</ul></details>` : ''}
+      ${r.analysis ? `<details class="sp-anal"><summary>模型解析 · 反哺优化（头脑风暴痕迹，不入知识库）</summary><div class="sp-anal-body">${esc(r.analysis)}</div></details>` : ''}
       <textarea class="sp-draft-area" spellcheck="false" placeholder="AI 结合知识库相关内容创作的草稿，可在此微调后确认入库">${esc(r.draft || '')}</textarea>
     </div>
     <div class="sp-acts">
@@ -194,6 +196,7 @@ function showHatchReport(r){
   const out = $('spOut');
   if(!out) return;
   const merged = r.decision === 'merged';
+  const analysis = (r && r.analysis) || window.__lastSparkAnalysis || "";
   const terms = (r.cluster_terms || []).map(t => `<span class="tag col">${esc(t)}</span>`).join('');
   const fb = (r.feedback_ids || []).length;
   const sibs = (r.siblings_incubating || []);
@@ -206,9 +209,14 @@ function showHatchReport(r){
     <div class="sp-head"><b>智能孵化报告</b>
       <span class="pill ${merged ? 'warn' : 'llm'}">${merged ? '已合并' : '新建'}</span></div>
     <div class="sp-body">
+      ${(!merged) ? (r.brainstorm
+        ? `<div class="sp-tags" style="margin-top:6px;"><span class="pill llm">模型解析 · 已反哺优化碎片</span> 解析痕迹仅展示、不入库；入库的是重写后的知识要点</div>`
+        : `<div class="sp-tags" style="margin-top:6px;"><span class="pill warn">未启用模型延伸</span> 去「设置」配置 provider 开启智能孵化</div>`)
+        : ''}
       <div>条目 <b>#${r.item_id}</b> · ${merged
         ? `已并入既有条目（保留其双尺定位）`
-        : `已落库并接入知识图谱`}</div>
+        : `已落库并接入知识图谱`}${(!merged && r.brainstorm) ? `；碎片本身已重写为优化版知识要点` : ''}</div>
+      ${analysis ? `<details class="sp-anal" style="margin-top:6px;"><summary>模型解析 · 头脑风暴（反哺优化用）</summary><div class="sp-anal-body">${esc(analysis)}</div></details>` : ''}
       ${terms ? `<div class="sp-tags" style="margin-top:4px;">来源簇主题：${terms}</div>` : ''}
       <div class="sp-tags" style="margin-top:6px;">
         关联发现：<b>${r.links_found}</b> 条潜在关联

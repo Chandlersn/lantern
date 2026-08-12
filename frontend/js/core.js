@@ -86,6 +86,8 @@ function renderTop(){
   $('navItems').textContent = S.items.length;
   $('navTotal').textContent = S.items.length;
   $('navEdges').textContent = S.edges.length;
+  const spNav = $('navSparks');
+  if(spNav) spNav.textContent = (S.sparks || {}).total || 0;
 }
 function renderNavBadges(){ /* 已在 renderTop 内更新 */ }
 
