@@ -38,6 +38,7 @@ function escAttr(s){
 }
 
 function sparkCard(sp){
+  const longBody = !!(sp.content && sp.content.length > 120);
   const tags = (sp.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('');
   const when = new Date((sp.created_at || 0) * 1000).toLocaleString('zh-CN',
     {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
@@ -53,7 +54,7 @@ function sparkCard(sp){
       <b>${esc(sp.title || '未命名')}</b>
       <span class="pill ${sp.status==='hatched'?'llm':sp.status==='incubating'?'warn':'hot'}">${statusLabel(sp.status)}</span>
     </div>
-    <div class="sp-body">${esc(sp.content)}</div>
+    <div class="sp-body${longBody ? ' sp-body--clamp' : ''}">${esc(sp.content)}</div>
     <div class="sp-tags">${tags}<span class="muted" style="margin-left:auto;">${when}</span></div>
     <div class="sp-acts">
       ${acts}
@@ -75,33 +76,62 @@ function clusterCard(c){
   </div>`;
 }
 
-function bindSparkCards(){
-  document.querySelectorAll('#spList .sp-hatch').forEach(b => b.onclick = async () => {
-    const id = b.dataset.id;
-    const card = b.closest('.sp-card');
-    b.disabled = true; b.textContent = '创作中';
+function bindSparkCard(card){
+  const id = parseInt(card.dataset.id, 10);
+  if(isNaN(id)) return;
+  const hatch = card.querySelector('.sp-hatch');
+  if(hatch) hatch.onclick = async () => {
+    hatch.disabled = true; hatch.textContent = '创作中';
     try {
       const r = await api('/api/sparks/' + id + '/draft', {});
       if(r && r.ok){ renderDraftEditor(card, r); }
       else { toast((r && r.msg) ? r.msg : '生成草稿失败'); await renderSparks(); }
     } catch(e){ toast('生成草稿失败'); await renderSparks(); }
-  });
-  document.querySelectorAll('#spList .sp-del').forEach(b => b.onclick = async () => {
+    finally { hatch.disabled = false; hatch.textContent = '孵化成知识'; }
+  };
+  const del = card.querySelector('.sp-del');
+  if(del) del.onclick = async () => {
     if(!(await confirmBox('确定删除这条灵感碎片？此操作不可恢复。', true))) return;
-    const r = await api('/api/sparks/' + b.dataset.id + '/delete', {});
+    const r = await api('/api/sparks/' + del.dataset.id + '/delete', {});
     if(r && r.ok){ toast('已删除'); await renderSparks(); }
-  });
-  document.querySelectorAll('#spList .sp-view').forEach(b => b.onclick = () => {
-    if(typeof openReader === 'function') openReader(parseInt(b.dataset.id, 10));
-  });
-  // 双击：所有灵感碎片卡片都在当前页面就地进入编辑状态（不再跳转阅读页）；
-  // 已孵化碎片想看对应知识条目，用卡片上的「查看条目」按钮。
-  document.querySelectorAll('#spList .sp-card').forEach(card => {
-    card.ondblclick = () => {
-      const id = parseInt(card.dataset.id, 10);
-      if(!isNaN(id)) startEdit(id);
-    };
-  });
+  };
+  const view = card.querySelector('.sp-view');
+  if(view) view.onclick = () => { if(typeof openReader === 'function') openReader(parseInt(view.dataset.id, 10)); };
+  // 单个碎片卡片：长内容默认收拢（4 行截断），不显示任何提示文字；单击卡片本体切换展开/收拢，
+  // 双击进入编辑态。用定时器区分单击/双击，避免双击时先展开又缩回。
+  const longCard = !!card.querySelector('.sp-body.sp-body--clamp');
+  let clickTimer = null;
+  card.onclick = (e) => {
+    if(card.classList.contains('sp-editing')) return;
+    if(e.target.closest('button, a, input, textarea')) return; // 按钮/输入框不触发收拢切换
+    if(!longCard) return;
+    if(clickTimer) return; // 已排程，等待判断是否双击
+    clickTimer = setTimeout(() => {
+      clickTimer = null;
+      const body = card.querySelector('.sp-body');
+      if(body) body.classList.toggle('sp-body--clamp');
+    }, 220);
+  };
+  card.ondblclick = () => {
+    if(clickTimer){ clearTimeout(clickTimer); clickTimer = null; }
+    if(!card.classList.contains('sp-editing')) startEdit(id);
+  };
+}
+
+function bindSparkCards(){
+  document.querySelectorAll('#spList .sp-card').forEach(bindSparkCard);
+}
+
+// 退出编辑态后立即就地切回预览卡片（不整列表重渲染，体验更顺）
+function previewCard(id){
+  const sp = sparkCache[id];
+  const card = document.querySelector(`#spList .sp-card[data-id="${id}"]`);
+  if(!sp || !card) return;
+  const holder = document.createElement('div');
+  holder.innerHTML = sparkCard(sp);
+  const next = holder.firstElementChild;
+  card.replaceWith(next);
+  bindSparkCard(next);
 }
 
 // 碰撞创作草稿编辑器：孵化阶段一返回的 proposal 在此内联渲染，用户可微调正文/标题，
@@ -169,7 +199,7 @@ function startEdit(id){
      </div>`;
   const saveBtn = card.querySelector('.sp-edit-save');
   const cancelBtn = card.querySelector('.sp-edit-cancel');
-  cancelBtn.onclick = () => renderSparks();
+  cancelBtn.onclick = () => previewCard(id);
   saveBtn.onclick = async () => {
     const content = (card.querySelector('.sp-edit-content').value || '').trim();
     const title = (card.querySelector('.sp-edit-title').value || '').trim();
@@ -178,7 +208,16 @@ function startEdit(id){
     saveBtn.disabled = true; saveBtn.textContent = '保存中';
     try {
       const r = await api(`/api/sparks/${id}/update`, {content, title, tags});
-      if(r && r.ok){ toast('已保存'); await renderSparks(); }
+      if(r && r.ok){
+        toast('已保存');
+        const sp = sparkCache[id];
+        if(sp){
+          sp.content = content;
+          sp.title = title;
+          sp.tags = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+        }
+        previewCard(id);
+      }
       else toast((r && r.msg) || '保存失败');
     } catch(e){ toast('保存失败'); }
     finally { saveBtn.disabled = false; saveBtn.textContent = '保存'; }
@@ -201,7 +240,7 @@ function showHatchReport(r){
   const fb = (r.feedback_ids || []).length;
   const sibs = (r.siblings_incubating || []);
   const sibBtns = sibs.length
-    ? `<div class="sp-tags" style="margin-top:6px;">同簇 ${sibs.length} 条已标「孵化中」：${
+    ? `<div class="sp-row sp-row--sib">同簇 ${sibs.length} 条已标「孵化中」：${
         sibs.map(id => `<button class="ghost sp-sib" data-id="${id}">孵化 #${id}</button>`).join('')
       }</div>`
     : '';
@@ -210,19 +249,22 @@ function showHatchReport(r){
       <span class="pill ${merged ? 'warn' : 'llm'}">${merged ? '已合并' : '新建'}</span></div>
     <div class="sp-body">
       ${(!merged) ? (r.brainstorm
-        ? `<div class="sp-tags" style="margin-top:6px;"><span class="pill llm">模型解析 · 已反哺优化碎片</span> 解析痕迹仅展示、不入库；入库的是重写后的知识要点</div>`
-        : `<div class="sp-tags" style="margin-top:6px;"><span class="pill warn">未启用模型延伸</span> 去「设置」配置 provider 开启智能孵化</div>`)
+        ? `<div class="sp-row sp-row--flag"><span class="sp-flag">模型解析 · 已反哺优化碎片</span><span class="muted">解析痕迹仅展示、不入库；入库的是重写后的知识要点</span></div>`
+        : `<div class="sp-row sp-row--flag"><span class="sp-flag sp-flag--warn">未启用模型延伸</span><span class="muted">去「设置」配置 provider 开启智能孵化</span></div>`)
         : ''}
-      <div>条目 <b>#${r.item_id}</b> · ${merged
+      <div class="sp-row sp-row--main">条目 <b>#${r.item_id}</b> · ${merged
         ? `已并入既有条目（保留其双尺定位）`
         : `已落库并接入知识图谱`}${(!merged && r.brainstorm) ? `；碎片本身已重写为优化版知识要点` : ''}</div>
-      ${analysis ? `<details class="sp-anal" style="margin-top:6px;"><summary>模型解析 · 头脑风暴（反哺优化用）</summary><div class="sp-anal-body">${esc(analysis)}</div></details>` : ''}
-      ${terms ? `<div class="sp-tags" style="margin-top:4px;">来源簇主题：${terms}</div>` : ''}
-      <div class="sp-tags" style="margin-top:6px;">
-        关联发现：<b>${r.links_found}</b> 条潜在关联
-        ${r.links_found ? `<button class="soft sp-graph">查看图谱</button>` : ''}
+      ${analysis ? `<details class="sp-anal"><summary>模型解析 · 头脑风暴（反哺优化用）</summary><div class="sp-anal-body">${esc(analysis)}</div></details>` : ''}
+      ${terms ? `<div class="sp-tags sp-tags--terms"><span class="sp-k">来源簇主题</span>${terms}</div>` : ''}
+      <div class="sp-stat">
+        <div class="sp-stat-main"><b>${r.links_found}</b><span>条</span></div>
+        <div class="sp-stat-dir">潜在关联发现${r.links_found ? `<button class="soft sp-graph">查看图谱</button>` : ''}</div>
       </div>
-      <div class="sp-tags">自检反馈：<b>${fb}</b> 条已入收件箱${fb ? '（🔔）' : ''}</div>
+      <div class="sp-stat">
+        <div class="sp-stat-main"><b>${fb}</b><span>条</span></div>
+        <div class="sp-stat-dir">自检反馈已入收件箱${fb ? `<span class="pill ok">待查看</span>` : ''}</div>
+      </div>
       ${sibBtns}
     </div></div>`;
   out.querySelectorAll('.sp-graph').forEach(b => b.onclick = () => {

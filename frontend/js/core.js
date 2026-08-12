@@ -85,7 +85,7 @@ function renderTop(){
   // 菜单内徽标
   $('navItems').textContent = S.items.length;
   $('navTotal').textContent = S.items.length;
-  $('navEdges').textContent = S.edges.length;
+  $('navEdges').textContent = S.links.length;
   const spNav = $('navSparks');
   if(spNav) spNav.textContent = (S.sparks || {}).total || 0;
 }

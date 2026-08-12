@@ -671,6 +671,28 @@
   .sp-body{font-size:13px;color:var(--ink);line-height:1.6;margin:6px 0;white-space:pre-wrap;word-break:break-word;}
   .sp-tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;}
   .sp-acts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+  /* 孵化报告内板块：对齐系统 .det-row / .det-stats / .det-flag 视觉语言 */
+  #view-sparks .sp-report .sp-body{white-space:normal;}
+  #view-sparks .sp-report .sp-row{font-size:12.5px;color:var(--muted);line-height:1.7;margin:9px 0;}
+  #view-sparks .sp-report .sp-row--main{color:var(--ink);}
+  #view-sparks .sp-report .sp-row--main b{color:var(--cinnabar);}
+  #view-sparks .sp-report .sp-row--flag{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  #view-sparks .sp-report .sp-flag{display:inline-block;font-size:11.5px;padding:3px 10px;border-radius:999px;background:transparent;border:1px solid var(--cinnabar);color:var(--cinnabar);font-weight:600;}
+  #view-sparks .sp-report .sp-flag--warn{border-color:#E4D2A8;color:#7a5d1c;background:#FBF3E2;}
+  #view-sparks .sp-report .sp-stat{display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:10px 13px;margin:9px 0;}
+  #view-sparks .sp-report .sp-stat-main{flex:0 0 auto;text-align:center;min-width:42px;}
+  #view-sparks .sp-report .sp-stat-main b{display:block;font-size:21px;line-height:1.1;color:var(--ink);}
+  #view-sparks .sp-report .sp-stat-main span{font-size:11px;color:var(--stone);}
+  #view-sparks .sp-report .sp-stat-dir{flex:1;min-width:0;font-size:12.5px;color:var(--stone);line-height:1.5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  #view-sparks .sp-report .sp-stat-dir .soft{margin-left:auto;}
+  #view-sparks .sp-report .sp-tags--terms{margin-top:8px;}
+  #view-sparks .sp-report .sp-tags--terms .sp-k{color:var(--muted);margin-right:4px;}
+  #view-sparks .sp-report .sp-row--sib{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;}
+  #view-sparks .sp-report .sp-row--sib .ghost{font-size:12px;padding:4px 10px;}
+  /* 单个碎片：长内容默认收拢（4 行截断），单击卡片切换展开/收拢，无文字提示 */
+  #view-sparks .sp-body{white-space:pre-wrap;word-break:break-word;}
+  #view-sparks .sp-body--clamp{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;position:relative;}
+  #view-sparks .sp-body--clamp::after{content:"";position:absolute;left:0;right:0;bottom:0;height:18px;background:linear-gradient(to bottom, rgba(255,255,255,0), var(--card));pointer-events:none;}
   #spContent{min-height:56px;}
 
   /* ============== 无障碍：尊重「减少动态效果」系统设置 ============== */
