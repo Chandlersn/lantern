@@ -42,8 +42,8 @@ Thumbs.db
 skills/*/state/*.json
 skills/*/scripts/__pycache__/
 
-# ---- 本地离线模型（大体积二进制，非源码；已离线下载至 .models/）----
-.models/
+# ---- 本地离线模型：现已通过 Git LFS 纳入仓库（见 .gitattributes），克隆即随附，无需手动下载 ----
+# 仅大体积权重（*.safetensors/*.bin）走 LFS；config/tokenizer 等小 json 仍作普通文本入库。
 
 # ---- 临时备份快照（如 schema.json.bak-*）----
 *.bak

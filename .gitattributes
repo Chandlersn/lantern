@@ -1,0 +1,6 @@
+# 本地嵌入模型权重走 Git LFS，避免大体积二进制污染 git 历史
+# 克隆即随附；仅需 `git lfs install`（首次）后即可正常使用。
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.bin         filter=lfs diff=lfs merge=lfs -text
+*.gguf        filter=lfs diff=lfs merge=lfs -text
+*.onnx        filter=lfs diff=lfs merge=lfs -text

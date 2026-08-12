@@ -17,7 +17,7 @@
 - **检索增强（RAG 原生）**：离线评分检索 + 最近邻 + 关系聚合（`kb_context`），直接聚合成可粘贴进 Agent 自身 prompt 的上下文文本。
 - **反馈邮箱**：引擎自检发现的问题（分类漂移 / 跨域同构 / 未形式化）经节流后右下角逐条弹窗 + 侧边收件箱呈现，且不污染文章正文。
 - **独立性守卫**：用实证皮尔逊相关系数守护两尺独立性，两尺坍缩时真拉闸、隔离偏移，而非带病运行。
-- **本地优先、零外部服务**：纯 Python 标准库 + SQLite；不填大模型凭据也能全功能运行（走本地启发式），填了则读数升级为真实模型结果。
+- **本地优先、零外部服务**：核心引擎纯 Python 标准库 + SQLite，不填大模型凭据也能全功能运行（走本地启发式）；填了则读数升级为真实模型结果。高质量本地语义嵌入为可选依赖 `sentence-transformers`（见 `requirements.txt`），模型已随仓库附于 `.models/`。
 
 ## 界面预览
 
@@ -53,7 +53,7 @@
       <br><br>
       <img src="./docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/><br>
       <b>③ 偏差地图</b><br>
-      <sub>横轴领域、纵轴形式化读数；点相对「领域基准趋势线」的浮动表达偏离，偏差线连到基准线、不穿过它。</sub>
+      <sub>横轴领域、纵轴形式化读数；点相对「领域基准趋势线」的浮动表达偏离。</sub>
     </td>
   </tr>
   <tr>
@@ -67,23 +67,10 @@
     <td align="center" valign="top">
       <img src="./docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/><br>
       <b>⑤ 灵感碎片</b><br>
-      <sub>无坐标的原料舱：随手记、关键词聚类、智能孵化成知识条目。</sub>
+      <sub>无坐标的原料舱：随手记、关键词聚类、智能孵化成知识条目；卡片双击编辑、长内容单击展开。</sub>
     </td>
   </tr>
 </table>
-
-### 截图命名对照表
-
-| 文件名 | 对应视图 | 画面要点 |
-|--------|----------|----------|
-| `docs/shots/overview.png` | ① 总览 | 顶部指标卡 + 领域分布条 + 灵感碎片统计卡 |
-| `docs/shots/knowledge.png` | ② 知识库 | 双尺度坐标列表 + 过滤框 |
-| `docs/shots/visualize.png` | ③ 逻辑偏差·坐标地图 | 双尺度坐标地图 SVG（含红虚线跨域边） |
-| `docs/shots/visualize-deviation.png` | ③ 逻辑偏差·偏差地图 | 横轴领域、纵轴形式化读数的散点，点相对领域基准趋势线的偏离 |
-| `docs/shots/graph.png` | ④ 知识图谱 | 力导布局节点与连线 |
-| `docs/shots/sparks.png` | ⑤ 灵感碎片 | 原料舱卡片 + 聚类簇 |
-
-> 把截图按上表文件名放进 `docs/shots/`（同名替换即自动更新）。README 重新渲染时会直接显示，无需任何额外配置。
 
 ## 核心思想（一图速览）
 
@@ -95,7 +82,7 @@
 
 ## 架构：分层与前后端分离
 
-灯笼刻意把**引擎、后端服务、前端**拆成三层，互不越界：
+刻意把**引擎、后端服务、前端**拆成三层，互不越界：
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -151,7 +138,7 @@ lantern-caliper/
 
 ## 怎么使用
 
-推荐把这个仓库直接交给支持代码和终端操作的 AI Agent（Codex / Claude Code / WorkBuddy 等），让它负责克隆、安装、启动与数据适配。项目只依赖 Python 标准库，**无需 pip install**。
+推荐把这个仓库直接交给支持代码和终端操作的 AI Agent（Codex / Claude Code / WorkBuddy 等），让它负责克隆、安装、启动与数据适配。核心引擎纯标准库、**无需 pip install**；若启用本地高维语义嵌入，先 `pip install -r requirements.txt`（拉取 sentence-transformers + torch，模型已随仓库附于 `.models/`）。
 
 ```bash
 # 1) 生成演示库（首次或重置；合成数据，无个人信息）
@@ -165,6 +152,8 @@ python backend/server.py               # 监听 http://127.0.0.1:8731/
 打开浏览器访问 `http://127.0.0.1:8731/` 即可。若 `lantern.db` 不存在，服务首次启动也会自动建库并种入演示数据，因此只跑 `python backend/server.py` 也能直接体验。
 
 > 要求 Python 3.10+。不配置大模型时，双尺定位走本地启发式，全功能可用。
+
+**可选 · 本地高维语义嵌入**：模型已随仓库附于 `.models/bge-small-zh-v1.5/`（由 Git LFS 管理，克隆即随附）。要启用，先 `pip install -r requirements.txt`（sentence-transformers + torch）。未安装时系统自动回退到哈希兜底，仍可运行，仅语义区分度略低。
 
 ## REST API 契约
 
