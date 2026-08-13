@@ -278,14 +278,33 @@ def deserialize_article(text):
         body_lines = lines
     return meta, "\n".join(body_lines).strip()
 
-def write_article_file(item_id):
+def write_article_file(item_id, _tries=3):
+    """把条目序列化写回本地 .md 镜像（DB -> 文件 协同）。
+
+    写文件可能被外部进程（如只读预览锁）短暂占住而 PermissionError；
+    此时重试几次给锁释放机会，仍失败则优雅降级——DB 才是唯一真相源，
+    镜像回写失败不阻断主流程（编辑保存/重载照常成功），下次 export/reload 可补齐。
+    """
+    import time
     ensure_articles_dir()
     it = get_item(item_id)
     if not it:
         return None
     p = article_path(item_id)
-    with open(p, "w", encoding="utf-8") as f:
-        f.write(serialize_article(it))
+    last_err = None
+    for _ in range(_tries):
+        try:
+            with open(p, "w", encoding="utf-8") as f:
+                f.write(serialize_article(it))
+            last_err = None
+            break
+        except PermissionError as e:         # 文件被外部只读锁占住
+            last_err = e
+            time.sleep(0.3)
+        except OSError as e:                  # 其他系统错误（磁盘满等）不重试
+            last_err = e
+            break
+    # last_err 非 None 即降级：DB 已落库，镜像回写失败不抛、不阻断调用方
     legacy = legacy_article_path(item_id)
     if legacy != p and os.path.exists(legacy):
         try:
