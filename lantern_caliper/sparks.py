@@ -351,6 +351,10 @@ def _infer_domain(sp, cluster_terms, kbm):
 # 解析 / 优化碎片 两段分隔符（模型须原样输出，便于稳定拆分）
 _ANAL_RE = re.compile(r"={2,}\s*解析\s*={2,}", re.S)
 _REFINE_RE = re.compile(r"={2,}\s*优化碎片\s*={2,}", re.S)
+# 入库前清洗守卫用：残留分隔符行 + 解析小标题（仅匹配我们显式写进提示词的几个词，
+# 不会误伤真实知识文章里偶见的「解析」等正常词汇）
+_RESIDUAL_SEP = re.compile(r"^[ \t]*={2,}\s*(解析|优化碎片|优化版知识要点|知识要点)\s*={2,}\s*$", re.M)
+_ANAL_FRAME_HEADERS = re.compile(r"^[ \t]*#{1,6}\s*(解析|头脑风暴解析|分析|优化碎片|优化版知识要点)\s*$", re.M)
 
 
 def _split_brainstorm(raw):
@@ -379,6 +383,28 @@ def _split_brainstorm(raw):
     return analysis, refined
 
 
+def _clean_refined(text, original):
+    """入库前最后一道守卫：确保 refined 是干净的知识短文，绝不混入头脑风暴分析体。
+
+    - 先判分析分隔符（===解析=== / ===优化碎片===）：一旦命中说明模型把分析塞进了
+      refined 字段，直接诚实退回原始碎片——绝不把分析当成品入库；
+    - 否则再剔除残留的其它分隔符行（===优化版知识要点=== 等）与解析小标题，返回清理后的正文。"""
+    if not text or not str(text).strip():
+        return (original or "").strip()
+    t = str(text).strip()
+    # 含分析分隔符 → 模型把分析塞进了 refined，视为解析失败，退回原始碎片
+    if _ANAL_RE.search(t) or _REFINE_RE.search(t):
+        return (original or "").strip()
+    # 否则清理可能残留的其它分隔符行 / 解析小标题
+    t = _RESIDUAL_SEP.sub("", t)
+    t = _ANAL_FRAME_HEADERS.sub("", t)
+    t = t.strip()
+    # 清理后为空（如整段只是标记/小标题）→ 退回原始碎片
+    if not t:
+        return (original or "").strip()
+    return t
+
+
 def _brainstorm_and_refine(title, spark_content, cluster_terms, related, decision, hit):
     """智能孵化核心：让模型对碎片做「头脑风暴解析」，并【反哺优化碎片】。
 
@@ -386,50 +412,58 @@ def _brainstorm_and_refine(title, spark_content, cluster_terms, related, decisio
       · analysis  = 模型的跨学科解析（核心观点 / 新问题 / 交叉领域 / 反方 / 下一步），
                     【仅作思考痕迹展示给用户，绝不入库】；
       · refined   = 把解析洞见反哺回碎片后、重写出的「优化版知识要点」（连贯知识短文），
-                    它才是【入库正文 + 写回碎片本身】的载体。
+                    它才是【入库正文 + 写回碎片本身】的载体，且经 _clean_refined 守卫、
+                    绝不混入解析体。
 
     即：头脑风暴的价值不在「分析本身成为知识」，而在「用分析把碎片打磨成更好的知识」。
-    优先真实大模型；不可用/失败退回本地模板。本函数【不落库】。"""
+    优先真实大模型（要求 JSON 结构输出，解析稳健，避免模型不严格分段导致分析体被当成品）；
+    不可用/失败退回本地模板。本函数【不落库】。"""
     related_text = "\n\n".join(
         f"【相关条目 #{r['id']} {r.get('title', '')}】\n{r.get('excerpt', '')}"
         for r in (related or [])[:3])
     if decision == "merged" and hit:
-        sys_p = ("你是知识整理助手。下面给出一段「新的灵感碎片」和一篇「已有知识条目」。"
-                 "请完成两件事：\n"
-                 "1) 头脑风暴解析：基于已有条目，点出这条新灵感带来的新角度、值得深究的问题、"
-                 "或可能的反方视角（简短，2-4 点）。\n"
-                 "2) 融合补充：把这条新灵感【吸收、融合】成一段可追加到该条目下的补充内容："
-                 "聚焦新意，不要复述已有条目已讲透的部分；保留原条目的视角与术语；"
-                 "输出纯文本（可分段，不用标题），300-600 字。\n"
-                 "请严格按以下格式输出（两个分隔符必须原样保留）：\n"
-                 "===解析===\n...简短解析...\n===优化碎片===\n...融合后的补充内容...")
+        sys_p = (
+            "你是知识整理助手。下面给出一段「新的灵感碎片」和一篇「已有知识条目」。\n"
+            "请只输出一个 JSON 对象，包含两个字段：\n"
+            "  \"analysis\": 基于已有条目，点出这条新灵感带来的新角度、值得深究的问题、"
+            "或可能的反方视角（简短，2-4 点；这是思考痕迹，仅展示、不入库）；\n"
+            "  \"refined\": 把这条新灵感【吸收、融合】成一段可追加到该条目下的补充内容："
+            "聚焦新意，不复述已有条目已讲透的部分；保留原条目视角与术语；"
+            "纯文本（可分段，不用标题），300-600 字——这是要入库的正文。\n"
+            "只输出 JSON，不要任何解释性文字、不要 Markdown 代码围栏。")
         usr = (f"已有条目《{hit.get('title', '')}》片段：\n{hit.get('content', '')[:900]}\n\n"
                f"新灵感碎片：\n{spark_content}")
     else:
-        sys_p = ("你是知识策展与头脑风暴助手。下面给出一段「灵感碎片」（用户的原始想法，可能很粗糙）"
-                 "和若干「知识库里相关的条目素材」。请完成两件事：\n"
-                 "1) 头脑风暴解析：以碎片为种子，做跨学科对话式解析，至少包含——"
-                 "   · 核心观点凝练（保留原意，不歪曲、不遗漏关键直觉）；"
-                 "   · 2-3 个由该碎片引申出的、值得深究的新问题；"
-                 "   · 它可能与哪些相邻学科/概念产生交叉（点出具体领域或概念名，不要空泛）；"
-                 "   · 一种可能的反方视角或边界条件（避免片面）；"
-                 "   · 若可落地，1-2 个可行的下一步（实验 / 检索 / 写作方向）。\n"
-                 "2) 优化碎片：把你从上述解析中提炼出的洞见，反哺回这条碎片本身——把原始碎片"
-                 "【重写】成一段更凝练、结构更清晰、可直接作为知识条目入库的「优化版知识要点」。"
-                 "它应保留原意与关键直觉，吸收解析中的交叉视角与反方边界；但【不要】写成"
-                 "「解析报告」或「头脑风暴清单」的样子，而是一篇连贯的知识短文"
-                 "（含小标题，300-700 字）。\n"
-                 "请严格按以下格式输出（两个分隔符必须原样保留）：\n"
-                 "===解析===\n...头脑风暴解析（Markdown）...\n"
-                 "===优化碎片===\n...重写后的优化版知识要点（Markdown，可直接入库）...")
+        sys_p = (
+            "你是知识策展与头脑风暴助手。下面给出一段「灵感碎片」（用户的原始想法，可能很粗糙）"
+            "和若干「知识库里相关的条目素材」。请只输出一个 JSON 对象，包含两个字段：\n"
+            "  \"analysis\": 以碎片为种子的跨学科解析——核心观点凝练、2-3 个值得深究的新问题、"
+            "可能的交叉领域、一种反方视角、1-2 个下一步（这是思考痕迹，仅展示给用户，绝不入库）；\n"
+            "  \"refined\": 把上述解析的洞见反哺回碎片本身，重写为一段结构清晰、可直接作为知识条目"
+            "入库的「优化版知识要点」。它必须是连贯的知识短文（含小标题，300-700 字），"
+            "【禁止】出现「解析 / 值得深究的问题 / 反方视角 / 下一步 / 头脑风暴」等元分析框架词，"
+            "不要分点罗列分析，而是把洞见融入成文章的论述——这是要入库的正文。\n"
+            "只输出 JSON，不要任何解释性文字、不要 Markdown 代码围栏。")
         usr = f"灵感碎片：\n{spark_content}\n\n知识库相关素材：\n{related_text}"
     if LLM_OK:
         try:
-            raw, _ = _llm.chat(sys_p, usr, temperature=0.4, max_tokens=1200,
+            raw, _ = _llm.chat(sys_p, usr, temperature=0.4, max_tokens=1400,
                                timeout=60, retries=1)
             if raw and raw.strip():
-                return _split_brainstorm(raw)
-        except Exception:                          # noqa: BLE001
+                # 主路径：JSON 结构解析（稳健，避免模型不严格分段导致分析体被当成品入库）
+                try:
+                    obj = _llm.parse_json(raw)
+                    analysis = (obj.get("analysis") or "").strip()
+                    refined = _clean_refined(obj.get("refined") or "", spark_content)
+                    if refined:
+                        return analysis, refined
+                except Exception:                      # noqa: BLE001
+                    # JSON 解析失败 → 兼容旧分隔符格式（===解析=== / ===优化碎片===）
+                    analysis, refined = _split_brainstorm(raw)
+                    refined = _clean_refined(refined, spark_content)
+                    if refined:
+                        return analysis, refined
+        except Exception:                              # noqa: BLE001
             pass
     return _local_brainstorm(title, spark_content, cluster_terms, related, decision, hit)
 

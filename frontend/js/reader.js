@@ -134,7 +134,7 @@ async function renderReader(){
       ? `<span class="tag">本地文件已同步</span>`
       : `<span class="tag">本地文件待生成</span>`);
   $('rdPath').textContent = file
-    ? ('本地文件：'+file+(r.file_exists?'':'（点「从文件重新载入」可生成）'))
+    ? ('本地文件：'+file+(r.file_exists?'':'（本地文件待生成，保存后生成）'))
     : '';
   $('btnRdLocate').onclick = ()=>selectView('visualize');   // 「看偏差」：进入偏差地图并聚焦本篇
   $('btnRdCopy').onclick = async ()=>{
@@ -147,10 +147,13 @@ async function renderReader(){
   };
   $('btnRdMode').onclick = ()=>setRdMode(rdMode==='preview'?'edit':'preview');
   $('btnRdCancel').onclick = ()=>setRdMode('preview');
-  $('btnRdReload').onclick = async ()=>{
-    const rr = await api('/api/kb/reload', {item_id: it.id});
-    if(rr.ok){ alert('已从本地文件重新载入'); await load(); await openReader(it.id); }
-    else alert('重新载入失败：'+(rr.msg||'未知错误'));
+  $('btnRdDelete').onclick = async ()=>{
+    if(!confirm(`确定删除《${title}》吗？\n\n数据库记录将永久删除、不可找回；本地 .md 文件会移入系统回收站（可找回）。`)){
+      return;
+    }
+    const rr = await api('/api/kb/delete', {item_id: it.id});
+    if(rr.ok){ toast('已删除《'+title+'》'); await load(); selectView('knowledge'); }
+    else alert('删除失败：'+(rr.msg||'未知错误'));
   };
   $('btnRdSave').onclick = async ()=>{
     const t = $('rdTitleEdit').value.trim(), c = $('rdBody').value.trim();

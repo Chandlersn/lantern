@@ -38,7 +38,11 @@ function renderKnowledge(){
   const totalPages = Math.max(1, Math.ceil(total / KB_PAGE_SIZE));
   if(kbPage > totalPages) kbPage = totalPages;
   const start = (kbPage - 1) * KB_PAGE_SIZE;
-  const pageItems = total > KB_PAGE_SIZE ? S.items.slice(start, start + KB_PAGE_SIZE) : S.items;
+  // 展示顺序：倒序（最新创建在最前，第一页即最新）；不改动 S.items 本体，避免影响图谱/概览等其他视图
+  const sortedItems = [...S.items].sort(
+    (a,b)=> (b.created_at||0) - (a.created_at||0) || (b.id||0) - (a.id||0)
+  );
+  const pageItems = total > KB_PAGE_SIZE ? sortedItems.slice(start, start + KB_PAGE_SIZE) : sortedItems;
   tb.innerHTML = pageItems.map(i=>{
     return `<tr data-id="${i.id}" class="${i.id===curId?'sel':''}">
       <td><b>${esc(i.title)}</b>${i.summary?`<div class="muted" style="font-weight:400;font-size:11px;margin-top:2px;">${esc(i.summary)}</div>`:''}</td>
