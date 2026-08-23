@@ -10,6 +10,7 @@ function renderModel(){
   $('btnHeu').disabled = !isLLM || busy;
   $('mNote').textContent = busy ? '正在用智能模型重新判断所有内容，请稍候…' : '';
   renderGuard('mGuard','mFamilies');
+  renderDomainGuard('mDomainGuard','mDomainFam');
   // 模型配置表单：打开设置页即拉取当前配置并填充
   api('/api/kb/config').then(c=>{
     if($('cfgBase')) $('cfgBase').value = c.api_base || '';

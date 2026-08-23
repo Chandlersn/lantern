@@ -53,6 +53,19 @@ def list_axes():
     return [dict(r) for r in rows]
 
 def domains_of_axes():
+    """「更细学科域」可选选择器——只返回注册表中的**可见受控学科域**。
+
+    C2 收口（防脏域自我强化）：候选名单**完全不依赖 items.axis_domain 的内容**。
+    此前实现会把 items.axis_domain 命中过的隐藏域自动开放进下拉，导致一旦写入
+    脏域（如「重叠窗口」），它就会进入选择器被反复选用、自我强化污染图谱。
+    现在：
+      - axes 表的受控学科域（透镜维度，已登记 band）保留；
+      - 注册表所有「可见」学科域全部开放；
+      - **不再**因 items.axis_domain 命中而开放隐藏域（该列本就是设计态全 None，
+        且写入已走 normalize_axis_domain 归一化，无脏值可触发）。
+    领域「涌现」由 readings.label（经 normalize_band 守门）+ list_domains() 承担，
+    不在此选择器内自我繁殖。
+    """
     con = connect()
     rows = con.execute("SELECT DISTINCT domain FROM axes").fetchall()
     # 维度（如「时间」）是轴向而非学科域，不进入「更细的领域」可选选择器；
@@ -60,19 +73,12 @@ def domains_of_axes():
     doms = [r["domain"] for r in rows
             if isinstance(_DOMAIN_REGISTRY.get(r["domain"]), dict)
             and "band" in _DOMAIN_REGISTRY.get(r["domain"])]
-    # 智能开放：注册表中「可见学科域」全部可选；隐藏域若已有真实内容映射
-    # （items.axis_domain 命中）则一并开放——内容映射到某隐藏域后，它既能在地图
-    # 显示，也能在赋值入口被再次选择。「根据真实内容映射智能开放」在赋值侧落地。
+    # 智能开放：注册表中「可见学科域」全部可选。隐藏域不再因内容映射自动开放，
+    # 切断「脏域 → 进下拉 → 被反复选 → 自我强化」的污染链路。
     reg_visible = [name for name, d in _DOMAIN_REGISTRY.items()
                    if isinstance(d, dict) and "band" in d and not d.get("hidden")]
-    item_doms = {r[0] for r in con.execute(
-        "SELECT DISTINCT axis_domain FROM items "
-        "WHERE axis_domain IS NOT NULL AND axis_domain != ''")}
-    reg_hidden_used = [name for name, d in _DOMAIN_REGISTRY.items()
-                       if isinstance(d, dict) and "band" in d
-                       and d.get("hidden") and name in item_doms]
     con.close()
-    allset = list(dict.fromkeys(doms + reg_visible + reg_hidden_used))
+    allset = list(dict.fromkeys(doms + reg_visible))
     # 按 (主干带 order, 带内 intra_band_order) 递增排序，客观呈现带内视角差异；
     # 维度类（如『时间』）已在上面过滤，不会进入选择器。绝不按字典序或条数排序。
     bb_order = {b["name"]: b.get("order", i + 1) for i, b in enumerate(BACKBONE_BANDS)}

@@ -76,7 +76,9 @@ def h_state(q, b, c):
     con = store.connect()
     data["mode"] = store.get_mode(con)
     con.close()
-    data["llm"] = store._llm.info() if store._llm.AVAILABLE else {"available": False}
+    _llm_info = store._llm.info() if store._llm.AVAILABLE else {"available": False}
+    _llm_info.pop("key", None)          # 不向前端回传密钥（安全）
+    data["llm"] = _llm_info
     data["metrics"] = kb.health()
     data["summary_backend"] = store.summary_backend()
     data["sparks"] = store.spark_stats()
@@ -84,7 +86,9 @@ def h_state(q, b, c):
 
 
 def h_llm(q, b, c):
-    return store._llm.info() if store._llm.AVAILABLE else {"available": False}
+    info = store._llm.info() if store._llm.AVAILABLE else {"available": False}
+    info.pop("key", None)               # 不向前端回传密钥（安全）
+    return info
 
 
 def h_isolation(q, b, c):
@@ -154,6 +158,38 @@ def h_kb_article(q, b, c):
     return kb.get_article(int(iid))
 
 
+def h_kb_asset(q, b, c):
+    """读取文章目录下的本地图片等静态资源（用于正文 ![alt](相对路径) 渲染）。
+    路径经 article_path 所在目录约束，杜绝目录穿越；仅允许常见资源后缀。
+    返回 (bytes, code, headers) 三元组；server._respond 识别并写出二进制。"""
+    import os as _os
+    from urllib.parse import unquote
+    iid = _q(q, "id")
+    rel = unquote(_q(q, "path") or "")
+    if not iid or not rel:
+        return ({"error": "缺少参数"}, 400)
+    if _os.path.isabs(rel) or ".." in rel.replace("\\", "/").split("/") or rel.startswith("/"):
+        return ({"error": "非法路径"}, 400)
+    if not re.search(r"\.(png|jpe?g|gif|webp|svg|bmp|ico)$", rel, re.I):
+        return ({"error": "不支持的资源类型"}, 400)
+    try:
+        base = _os.path.dirname(kb.store.article_path(int(iid)))
+        full = _os.path.normpath(_os.path.join(base, rel))
+        if not _os.path.abspath(full).startswith(_os.path.abspath(base)):
+            return ({"error": "越权访问"}, 403)
+        if not _os.path.exists(full):
+            return ({"error": "资源不存在"}, 404)
+        ctype = {"png":"image/png","jpg":"image/jpeg","jpeg":"image/jpeg","gif":"image/gif",
+                 "webp":"image/webp","svg":"image/svg+xml","bmp":"image/bmp","ico":"image/x-icon"}.get(
+                 rel.rsplit(".",1)[-1].lower(), "application/octet-stream")
+        with open(full, "rb") as f:
+            data = f.read()
+        return (data, 200, {"Content-Type": ctype, "Cache-Control": "no-store"})
+    except Exception as e:
+        return ({"error": str(e)}, 500)
+
+
+
 def h_kb_backlinks(q, b, c):
     iid = _q(q, "id")
     if not iid:
@@ -187,7 +223,20 @@ def h_graph(q, b, c):
 
 
 def h_concepts(q, b, c):
-    return {"concepts": store.list_concepts()}
+    concepts = store.list_concepts()
+    fallback = not concepts
+    if not concepts:
+        # LLM 概念层为空：从 items 的 tags 聚合成"概念雏形"，保证图有内容
+        concepts = store.tag_concepts_fallback()
+    else:
+        # 概念层已有（LLM 提取）：补充 tag 聚合的概念，合并去重，让共现网络更密
+        tags = store.tag_concepts_fallback()
+        have = {c["name"] for c in concepts}
+        for t in tags:
+            if t["name"] not in have:
+                concepts.append(t)
+                have.add(t["name"])
+    return {"concepts": concepts, "fallback": fallback}
 
 
 def h_kb_concept_neighbors(q, b, c):
@@ -287,6 +336,22 @@ def h_kb_search(q, b, c):
 
 def h_kb_position(q, b, c):
     return kb.position(b.get("text", ""))
+
+
+def h_kb_multidim(q, b, c):
+    """多维联合检索：语义 + 主尺 + 游标 + 领域带 + 标签 + 偏差上限，一次跨轴返回。"""
+    def _f(key):
+        v = b.get(key)
+        return float(v) if v not in (None, "") else None
+    return store.multidim_search(
+        text=b.get("text", "") or "",
+        k=int(b.get("k", 10)),
+        band=b.get("band") or None,
+        main_min=_f("main_min"), main_max=_f("main_max"),
+        vernier_min=_f("vernier_min"), vernier_max=_f("vernier_max"),
+        tags=b.get("tags") or None,
+        offset_max=_f("offset_max"),
+        grouped=bool(b.get("grouped")))
 
 
 def h_kb_calibrate(q, b, c):
@@ -418,6 +483,22 @@ def h_feedback_applied(q, b, c):
     return {"ok": store.mark_feedback_applied(int(b.get("id")))}
 
 
+def h_feedback_correct(q, b, c):
+    # 对话式闭环：人在同一条反馈下给出修正，立即落回文章
+    try:
+        fid = int(b.get("id"))
+        correction = {
+            "corrected_domain": (b.get("corrected_domain") or "").strip(),
+            "corrected_summary": (b.get("corrected_summary") or "").strip(),
+            "note": (b.get("note") or "").strip(),
+        }
+        if not any(correction.values()):
+            return ({"ok": False, "msg": "请至少填写正确领域、正确摘要或一条修正意见"}, 400)
+        return {"ok": True, **store.apply_human_correction(fid, correction)}
+    except Exception as e:  # noqa: BLE001
+        return ({"ok": False, "msg": str(e)}, 400)
+
+
 def h_feedback_dismiss(q, b, c):
     return {"ok": store.dismiss_feedback(int(b.get("id")))}
 
@@ -495,6 +576,7 @@ ROUTES = [
     ("POST", r"^/api/feedback/clear$", h_feedback_clear),
     ("POST", r"^/api/feedback/not_duplicate$", h_feedback_not_duplicate),
     ("POST", r"^/api/feedback/apply$", h_feedback_apply),
+    ("POST", r"^/api/feedback/correct$", h_feedback_correct),
 
     # ---- 灵感碎片（原料层）----
     ("GET", r"^/api/sparks$", h_sparks_list),
@@ -514,6 +596,7 @@ ROUTES = [
     ("GET", r"^/api/kb/config$", h_kb_config),
     ("GET", r"^/api/kb/edges$", h_kb_edges),
     ("GET", r"^/api/kb/article$", h_kb_article),
+    ("GET", r"^/api/kb/asset$", h_kb_asset),
     ("GET", r"^/api/kb/backlinks$", h_kb_backlinks),
     ("GET", r"^/api/kb/axes$", h_kb_axes),
     ("GET", r"^/api/kb/similar$", h_kb_similar),
@@ -531,6 +614,7 @@ ROUTES = [
     ("POST", r"^/api/kb/linked_neighbors$", h_kb_linked_neighbors),
     ("POST", r"^/api/kb/search$", h_kb_search),
     ("POST", r"^/api/kb/position$", h_kb_position),
+    ("POST", r"^/api/kb/multidim$", h_kb_multidim),
     ("POST", r"^/api/kb/calibrate$", h_kb_calibrate),
     ("POST", r"^/api/kb/mode$", h_kb_mode),
     ("POST", r"^/api/kb/config_set$", h_kb_config_set),

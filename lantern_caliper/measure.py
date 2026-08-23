@@ -4,6 +4,35 @@
 import math
 import re
 
+try:
+    from . import feedback as _fb
+except Exception:                                  # noqa: BLE001
+    _fb = None
+
+try:
+    from . import core as _core
+except Exception:                                  # noqa: BLE001
+    _core = None
+
+def normalize_band(value, content="", known_domains=None):
+    """落库前最后一道关：主尺领域名必须「够宽、非技术碎片」。
+
+    双层放行逻辑（兼容「领域涌现」设计）：
+      1) 若 name 已是库内合法涌现域（known_domains 传入的 list_domains() 结果），
+         直接放行——避免把「缓存管理 / 信息检索」这类已被图谱认可的细领域误杀；
+      2) 否则过 _is_broad_field 守门：技术 / 实体碎片（重叠窗口 / rag / 梯度下降）
+         判否并退回本地启发式（measure_main 只产出够宽域 / 主干带），杜绝脏域落库。
+
+    注意：本系统领域是涌现的，允许的细领域并不都在 63 个主干学科域词表内，故
+    **不**用静态词表硬卡（那会打散图谱），而是「已知域放行 + 新域够宽守门」。
+    """
+    if not value:
+        return None
+    v = str(value).strip()
+    if known_domains and v in known_domains:
+        return v
+    return v if _is_broad_field(v, content) else None
+
 def backbone_of(pos):
     """按主尺位置落回主干学科带；带是范围，不是点。"""
     p = float(pos)
@@ -123,10 +152,11 @@ def list_domains():
     con = connect()
     rows = con.execute("""
         SELECT i.id, i.content,
-               m.label AS band, m.value AS pos, v.value AS vern
+               m.label AS band, m.value AS pos,
+               COALESCE(v.value, 50) AS vern
         FROM items i
         JOIN readings m ON m.item_id = i.id AND m.scale = 'main'
-        JOIN readings v ON v.item_id = i.id AND v.scale = 'vernier'
+        LEFT JOIN readings v ON v.item_id = i.id AND v.scale = 'vernier'
         WHERE m.label IS NOT NULL AND m.label != '' AND m.label != '未分类'
         ORDER BY i.id
     """).fetchall()
@@ -222,31 +252,63 @@ def measure_vernier(content):
     conf = round(min(1.0, (kinds + quant) / 5.0), 3)
     return round(max(0.0, min(100.0, depth)), 1), conf
 
-def measure_pair(content, mode):
+def measure_pair(content, mode, item_id=None):
     """按模式取两尺读数。llm 模式下两路输入互补切分，彼此看不到对方的信息。
 
     熔断中或模型调用失败一律退回本地启发式，绝不抛错阻塞主流程——这是
     「保存不被慢接口拖住」的兜底：分类路径永远有本地结果可用。
+
+    领域把关闭环（B 项）：模型原始判定的 band 与最终落库 band 不一致时，
+    记一条 domain_corrected 反馈（真实的「纠正信号」），模型后续分类可参考
+    历史纠正逐步收敛边界。技术碎片被拦、或够宽但被 known/normalize 纠正都覆盖。
     """
+    model_band = None
     if mode == "llm" and LLM_OK:
         if _llm.breaker_state()["open"]:
             pass                                       # 熔断中：直接走启发式
         else:
             try:
                 m, v = _llm.measure_pair(content, list_domains())
-                band = (m.get("band") or "").strip()
-                # 模型若仍吐出「重叠窗口 / rag」这类窄义词，拒绝并退回到
-                # 本地把关的归类（要么归入够宽的已有领域，要么回主干带）。
-                if band and _is_broad_field(band, content):
-                    return (
-                        (band, m["pos"], m["conf"], LLM_MAIN_PROVIDER, m.get("reason", "")),
-                        (v["depth"], v["conf"], LLM_VERNIER_PROVIDER, v.get("reason", "")),
-                    )
-                # 否则按本地规则重算（覆盖 measure_main 里的 LLM 分支已跳过）
+                model_band = (m.get("band") or "").strip()
+                # 模型吐的 band 先过守门（够宽 + 已知域）；不在此直接 return，
+                # 而是留给下方统一收口，以便准确比较「模型原判 vs 最终落库」。
             except Exception:                          # noqa: BLE001
                 pass                                   # 模型不可用：退回启发式
     band_name, pos, mconf = measure_main(content)
+    # C1 收口：最终落库的主尺领域必须「够宽、非技术碎片」。已知涌现域直接放行，
+    # 新名过 _is_broad_field 守门；技术碎片退回本地启发式（measure_main 只产出
+    # 够宽域 / 主干带），杜绝「重叠窗口 / rag」这类脏域落库。
+    known = set(d["name"] for d in list_domains())
+    if normalize_band(band_name, content, known_domains=known) is None:
+        band_name, pos, mconf = measure_main(content)
     depth, vconf = measure_vernier(content)
+    # 领域把关闭环：模型原判与最终落库不一致 → 记纠正信号（B1/B2）
+    # 关联真实 item_id 且可推送：人能在反馈邮箱内对这条「疑似误判」当场修正。
+    # 去重：同一 item + 同一模型误判域 已有未处理条时跳过，避免顽固误判刷屏。
+    if model_band and model_band != band_name and _fb is not None:
+        try:
+            if item_id:
+                con = _core.connect()
+                try:
+                    dup = con.execute(
+                        "SELECT 1 FROM feedback_inbox WHERE item_id=? AND status IN ('unread','read') "
+                        "AND review LIKE ? LIMIT 1",
+                        (item_id, '%"model_band": "%s"' % model_band.replace('"', '\\"'))).fetchone()
+                finally:
+                    con.close()
+                if dup:
+                    return ((band_name, pos, mconf, MAIN_PROVIDER, ""),
+                            (depth, vconf, VERNIER_PROVIDER, ""))
+            _fb.push_feedback(
+                item_id or 0, f"领域分类被纠正：模型判『{model_band}』→ 落库『{band_name}』",
+                band_name,
+                {"type": "domain_corrected", "model_band": model_band,
+                 "final_band": band_name,
+                 "reason": "模型原判过窄/非受控域（技术或实体当领域），被守门纠正为够宽受控域",
+                 "contract": "DOMAIN_CLASSIFICATION_CONTRACT.md §2.1"},
+                severity="info", must_revise=0, pushable=1)
+        except Exception:                              # noqa: BLE001
+            pass
     return ((band_name, pos, mconf, MAIN_PROVIDER, ""),
             (depth, vconf, VERNIER_PROVIDER, ""))
 

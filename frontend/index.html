@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>灯笼 · 知识库</title>
-<link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 <div class="app">
@@ -148,8 +148,11 @@
           </div>
           <div id="rdChips" class="chips"></div>
           <p class="desc" id="rdPath"></p>
-          <!-- 预览模式（默认）：只读展示 -->
-          <div id="rdPreview" class="rd-preview"></div>
+          <!-- 预览模式（默认）：只读展示 + 右侧浮动大纲 -->
+          <div class="rd-layout">
+            <div id="rdPreview" class="rd-preview"></div>
+            <nav id="rdToc" class="rd-toc" style="display:none;"></nav>
+          </div>
           <p class="rd-hint" id="rdHint">预览模式：双击正文，或点右上「切换到编辑」即可修改。</p>
           <!-- 编辑模式：标题 + 正文 + 保存/取消 -->
           <div id="rdEdit" style="display:none;">
@@ -228,6 +231,7 @@
               <button class="chip active" data-f="all">全部</button>
               <button class="chip ghost" id="btnRelayout">重新布局</button>
               <button class="chip ghost" id="btnConsolidate" title="把近义碎片领域并回正确的上位领域">整理领域</button>
+              <button class="chip ghost" id="btnConceptLayer" title="切换到概念层网络图（概念共现）">概念层</button>
             </div>
           </div>
         </div>
@@ -300,6 +304,12 @@
             <div id="mGuard" class="guard g-healthy">检测中…</div>
             <div class="kv" id="mFamilies" style="margin-top:10px;"></div>
             <div class="note">关联度越低越好：低于 0.6 健康，高于 0.85 受损。</div>
+          </div>
+          <div class="card">
+            <h2>领域把关健康度</h2>
+            <div id="mDomainGuard" class="guard g-healthy">检测中…</div>
+            <div class="kv" id="mDomainFam" style="margin-top:10px;"></div>
+            <div class="note">领域划分守门信号：模型累计被判错的领域经守门纠正的次数。0 表示模型已收敛到正确领域边界，数字越大说明边界仍在学习中。</div>
           </div>
         </div>
 
@@ -456,6 +466,7 @@
         <button class="chip active" data-qm="kw">按关键词</button>
         <button class="chip" data-qm="sem">按意思找</button>
         <button class="chip" data-qm="frag">定位到段落</button>
+        <button class="chip ghost" id="qGroupBy" title="按主题轴聚合结果（非线性索引原型）" type="button">按主题分组</button>
       </div>
       <div id="qResults" class="search-results"></div>
     </div>

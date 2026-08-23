@@ -10,9 +10,41 @@ def local_summarize(content):
     text = (content or "").strip()
     if not text:
         return None, None
-    # 摘要取第一个完整句子（只按句末标点断，不按空格/逗号断）
-    first = next((c.strip() for c in _SENT.split(text) if c.strip()), "")
-    summary = first[:40] + ("…" if len(first) > 40 else "")
+    # 摘要取第一个完整陈述句。需先剥离开头的 markdown 标题/空行/纯标题行，
+    # 否则文章以「# 标题」或标题式短语开头时，摘要会退化成标题而非陈述。
+    # 步骤：① 去掉每行前导 # 号（markdown 标题标记）；② 跳过空行与「像标题」的短行
+    #      （无句末标点、长度≤20、且不以陈述符结尾）；③ 取第一个以陈述符收尾的句子。
+    _MD = re.compile(r"^\s{0,3}#{1,6}\s*")          # 行首 markdown 标题 # 号
+    _STMT = re.compile(r"[。！；.!;]")               # 陈述句收尾符
+    _TITLEISH = re.compile(r"[？?：:]")              # 问句/冒号标题式收尾（不取作摘要）
+    cleaned_lines = []
+    for line in text.splitlines():
+        line = _MD.sub("", line).strip()            # 剥 # 号
+        if not line:
+            continue
+        cleaned_lines.append(line)
+    # 跳过开头「像标题」的行（无陈述符收尾、且含问号/冒号或偏短），定位正文起始
+    start = 0
+    for i, line in enumerate(cleaned_lines):
+        looks_title = (not _STMT.search(line)) and (
+            _TITLEISH.search(line) or len(line) <= 20)
+        if looks_title:
+            start = i + 1
+        else:
+            break
+    body = "\n".join(cleaned_lines[start:]) or "\n".join(cleaned_lines)
+    # _SENT 已按句末标点（。！？；等）切分，切出的非空片段原本都以句末标点收尾，
+    # 故它们都是「完整句候选」；句末标点已被切掉，无需再判 _STMT。
+    # 优先选「不以连词/因果词开头」的独立陈述句，避免摘要以「因为/所以/但是」起头。
+    _LEAD = re.compile(r"^(因为|所以|但是|然而|于是|而且|并且|如果|虽然|尽管|换句话说|也就是说|即|但)")
+    sentences = [c.strip() for c in _SENT.split(body) if c.strip()]
+    standalone = [s for s in sentences if not _LEAD.match(s)]
+    stmt = (standalone or sentences or [None])[0]
+    if stmt is None:
+        # 全文无句子（极端情况）：取最长非标题行兜底
+        stmt = max(cleaned_lines, key=len) if cleaned_lines else ""
+    summary = re.sub(r"[*_`>#]", "", stmt).strip()  # 清残留 markdown 符号
+    summary = summary[:40] + ("…" if len(summary) > 40 else "")
 
     # 标签候选：中文连续片段 + 英文词。英文词整体保留；中文长片段才切二元组
     grams = collections.Counter()
@@ -94,4 +126,35 @@ def summary_backend():
     if left:
         return {"backend": "local", "reason": f"模型接口连续失败，{left}s 后重试"}
     return {"backend": "llm", "reason": ""}
+
+
+_MD_RESIDUE = re.compile(r"[*_`>#~\-]{1,}")      # markdown 残留符号
+_TAIL_PUNCT = re.compile(r"^[，。、；：:,.!?！？\s]+|[，。、；：:,.!?！？\s]+$")
+
+
+def sanitize_summary(text, max_len=80):
+    """L0 收口（A2 · 入库校验）：把任意来源（LLM / 本地兜底）的摘要归一化为
+
+    满足 DOMAIN_CLASSIFICATION_CONTRACT §7 的 L0 字段——纯陈述、无 markdown 残留、
+    长度 ≤ max_len 汉字、非空。落库前最后一道关，保证无论模型怎么抽风，写进
+    items.summary 的一定是合规的一句人话。
+
+    返回清洗后的字符串；若清洗后为空（极罕见，如原文全为符号），返回 None，
+    由调用方回到「首句 / 标题」兜底，不允许空 summary 落库。
+    """
+    if not text:
+        return None
+    s = _MD_RESIDUE.sub("", text)                 # 去 markdown 符号
+    s = re.sub(r"\s+", " ", s).strip()            # 折叠空白
+    s = _TAIL_PUNCT.sub("", s)                    # 去首尾标点/空白
+    if not s:
+        return None
+    # 长度约束：优先在句末标点处断，避免硬切中文词；无标点则按字符截断。
+    if len(s) > max_len:
+        cut = s[:max_len]
+        m = re.search(r"[。！？!?；;，,、\s]", cut[::-1])   # 从末尾向前找最近断点
+        if m:
+            cut = cut[:max_len - m.start()]
+        s = cut.rstrip("，。、；:：,.; ") + "…"
+    return s
 

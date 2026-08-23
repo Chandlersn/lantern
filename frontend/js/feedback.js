@@ -143,7 +143,7 @@ function expandFbToast(el, it, clearAuto){
     `<div class="fb-acts">` +
       (it.item_id ? `<button class="soft" data-act="open">查看原文</button>` : "") +
       (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "") +
-      (it.item_id && it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "") +
+      (fbCanApply(it) ? `<button data-act="applied">应用更新</button>` : "") +
       (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "") +
       (it.review && it.review.type === "near_duplicate" ? `<button class="soft" data-act="notdup">标记非重复</button>` : "") +
       (!it.item_id ? `<span class="fb-hint muted">此提示针对「条目对关系」，无单篇可应用更新</span>` : "") +
@@ -191,6 +191,15 @@ function fbPreview(it){
                rv.over_reach || (SEV_LABEL[it.severity] || "收到一条反馈");
   const s = ("" + pick).replace(/\n/g, " ");
   return s.length > 60 ? s.slice(0, 60) + "…" : s;
+}
+
+// 「应用更新」只对「对抗审查」类反馈有意义（有修订稿可生成）；
+// domain_corrected（领域守门纠正）走人「修正」入口，near_duplicate（重复检测）走「标记非重复」。
+// 这两者点「应用更新」无修订稿、会弹 alert 误导。
+function fbCanApply(it){
+  const t = it.review && it.review.type;
+  if(t === "domain_corrected" || t === "near_duplicate") return false;
+  return !!(it.item_id && it.status !== "applied");
 }
 
 /* ---------------- 收件箱面板 ---------------- */
@@ -298,14 +307,45 @@ function fbCard(it){
     + `</div>`
     + `<div class="fb-meta">${dom}<span class="muted">${t}</span><span class="fb-sev">${SEV_LABEL[it.severity]||""}</span></div>`
     + (body ? `<div class="fb-rev">${body}</div>` : "")
+    + fbHumanCorrectionHTML(it)                       // 已有人修正 → 显示对话记录
+    + fbCorrectFormHTML(it)                            // 内联修正区（对话式：人在本条下回一句）
     + `<div class="fb-acts">`
     + (it.item_id ? `<button class="soft" data-act="open">查看原文</button>` : "")
     + (it.status==="unread" ? `<button class="soft" data-act="read">标已读</button>` : "")
-    + (it.item_id && it.status!=="applied" ? `<button data-act="applied">应用更新</button>` : "")
+    + (fbCanApply(it) ? `<button data-act="applied">应用更新</button>` : "")
     + (it.status!=="dismissed" ? `<button class="soft" data-act="dismiss">忽略</button>` : "")
     + (it.review && it.review.type === "near_duplicate" ? `<button class="soft" data-act="notdup">标记为非重复</button>` : "")
+    + (it.item_id && !it.human_correction ? `<button class="soft" data-act="correct">修正</button>` : "")
     + `<button class="soft danger" data-act="delete">删除</button>`
     + (!it.item_id ? `<div class="fb-hint muted">此提示针对「条目对关系」，无单篇可应用更新</div>` : "")
+    + `</div></div>`;
+}
+
+// 人已在同一条反馈下给出修正 → 在反馈下方显示「人原话 + 已落库」，形成对话记录
+function fbHumanCorrectionHTML(it){
+  const hc = it.human_correction;
+  if(!hc || typeof hc !== "object") return "";
+  const parts = [];
+  if(hc.corrected_domain) parts.push(`<div>· 正确领域：<b>${esc(hc.corrected_domain)}</b></div>`);
+  if(hc.corrected_summary) parts.push(`<div>· 正确摘要：<b>${esc(hc.corrected_summary)}</b></div>`);
+  if(hc.note) parts.push(`<div>· 意见：${esc(hc.note)}</div>`);
+  if(!parts.length) return "";
+  const when = hc.at ? new Date(hc.at*1000).toLocaleString("zh-CN",{hour12:false}) : "";
+  return `<div class="fb-hc"><div class="fb-hc-h">人修正 · 已落回文章 <span class="muted">${when}</span></div>`
+    + parts.join("") + `</div>`;
+}
+
+// 内联修正区：点「修正」后就地展开，人填正确领域/摘要/意见，提交即落回
+function fbCorrectFormHTML(it){
+  if(it.human_correction) return "";   // 已修正过就不再显示表单（避免重复覆盖）
+  return `<div class="fb-correct" data-correct-for="${it.id}" hidden>`
+    + `<div class="fb-correct-h">在这条反馈下直接修正（系统立即落回文章）：</div>`
+    + `<label>正确领域<input type="text" class="fb-c-domain" placeholder="如：社会心理学"></label>`
+    + `<label>正确摘要<input type="text" class="fb-c-summary" placeholder="一句话摘要"></label>`
+    + `<label>其它意见<textarea class="fb-c-note" placeholder="或其它修正说明（可不填）"></textarea></label>`
+    + `<div class="fb-correct-acts">`
+    + `<button class="fb-c-submit" data-id="${it.id}">确认修正</button>`
+    + `<button class="soft fb-c-cancel">取消</button>`
     + `</div></div>`;
 }
 
@@ -337,11 +377,51 @@ function bindFbCards(items){
           else alert("操作失败");
           return;
         }
+        if(act==="correct"){
+          const box = card.querySelector(`.fb-correct[data-correct-for="${id}"]`);
+          if(box) box.hidden = !box.hidden;
+          return;
+        }
         const map = { read:"/api/feedback/read", dismiss:"/api/feedback/dismiss" };
-        await api(map[act], { id });
-        refreshFeedback(false);
+        if(map[act]){ await api(map[act], { id }); refreshFeedback(false); }
       };
     });
+    // 对话式修正：提交 / 取消
+    const submit = card.querySelector(".fb-c-submit");
+    if(submit){
+      submit.onclick = async (e)=>{
+        e.stopPropagation();
+        const box = card.querySelector(`.fb-correct[data-correct-for="${id}"]`);
+        const dom = box.querySelector(".fb-c-domain").value.trim();
+        const sum = box.querySelector(".fb-c-summary").value.trim();
+        const note = box.querySelector(".fb-c-note").value.trim();
+        if(!dom && !sum && !note){ alert("请至少填写一项（正确领域 / 摘要 / 意见）"); return; }
+        submit.disabled = true; submit.textContent = "修正中…";
+        try{
+          const r = await api("/api/feedback/correct",
+            { id, corrected_domain: dom, corrected_summary: sum, note });
+          if(r && r.ok){
+            const what = (r.applied||[]).map(x=>x==="domain"?"领域":"摘要").join("、");
+            refreshFeedback(false);
+            if(what) alert(`已按你的意见修正 ${what}，并落回文章。`);
+            else alert("已记录你的修正意见。");
+          } else {
+            alert("修正失败：" + ((r&&r.msg) || "未知错误"));
+            submit.disabled = false; submit.textContent = "确认修正";
+          }
+        }catch(err){
+          alert("修正失败：" + err.message);
+          submit.disabled = false; submit.textContent = "确认修正";
+        }
+      };
+    }
+    const cancel = card.querySelector(".fb-c-cancel");
+    if(cancel){
+      cancel.onclick = (e)=>{ e.stopPropagation();
+        const box = card.querySelector(`.fb-correct[data-correct-for="${id}"]`);
+        if(box) box.hidden = true;
+      };
+    }
   });
 }
 

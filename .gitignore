@@ -31,6 +31,16 @@ __pycache__/
 backups/
 _deleted_*/
 
+# ---- 本地数据库副本（个人数据，绝不入库）----
+lantern_caliper.db
+lantern_caliper.db-shm
+lantern_caliper.db-wal
+
+# ---- 临时诊断 / 探针脚本（下划线前缀，非项目内容）----
+_tmp_*.py
+_probe_*.py
+*.db.backup*
+
 # ---- 操作系统 / 编辑器杂项 ----
 .DS_Store
 Thumbs.db

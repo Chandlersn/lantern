@@ -42,6 +42,12 @@ def _row_feedback(r):
     except (json.JSONDecodeError, TypeError):
         d["review"] = {"raw": d["review"]}
     d["pushable"] = d.get("pushable", 1)
+    hc = d.get("human_correction")
+    if hc and isinstance(hc, str):
+        try:
+            d["human_correction"] = json.loads(hc)
+        except (json.JSONDecodeError, TypeError):
+            d["human_correction"] = None
     return d
 
 def list_feedback(status=None, limit=100):
@@ -169,6 +175,89 @@ def clear_feedback():
     con.execute("DELETE FROM feedback_inbox")
     con.commit(); con.close()
     return n
+
+
+def apply_human_correction(fid, correction):
+    """对话式闭环：人在同一条反馈下给出修正，系统立即落回文章。
+
+    correction: dict，可含
+      - corrected_domain: 人认定的正确学科域（落回 items.axis_domain + readings 主尺，保持双尺度一致）
+      - corrected_summary: 人认定的正确一句话摘要（过 L0 收口后落回 summary）
+      - note: 人写的其它修正意见（仅记录，不落库正文）
+    落库后把 correction（附时间戳）写入 feedback_inbox.human_correction，状态置 applied。
+    返回 {ok, applied:[...], item_id}。"""
+    fb = get_feedback(fid)
+    if not fb:
+        raise ValueError("反馈不存在")
+    item_id = fb.get("item_id")
+    if not item_id:
+        raise ValueError("该反馈未关联文章，无法落回修正")
+    from . import items as _items          # 局部导入，避免顶层循环依赖
+    from . import summarize as _sum
+    from . import schema as _schema
+    applied = []
+    # 1) 领域修正：人的判断是最终权威，直接落回 items.axis_domain，
+    #    并把 readings 主尺 label 同步为该域（value 归到其主干带中心，缺失则保留原值）。
+    dom = (correction.get("corrected_domain") or "").strip()
+    if dom:
+        con = connect()
+        con.execute("UPDATE items SET axis_domain=? WHERE id=?", (dom, item_id))
+        center = None
+        try:
+            tb = _schema.domain_band_name(dom)
+            if tb:
+                for b in _items.BACKBONE_BANDS:
+                    if b["name"] == tb:
+                        center = b["center"]; break
+        except Exception:                   # noqa: BLE001
+            pass
+        old = con.execute(
+            "SELECT * FROM readings WHERE item_id=? AND scale='main'", (item_id,)
+        ).fetchone()
+        if old:
+            new_val = center if center is not None else old["value"]
+            con.execute(
+                "INSERT OR REPLACE INTO readings(item_id,scale,value,label,confidence,"
+                "provider,signal_family,revised,computed_at) VALUES(?,?,?,?,?,?,?,1,?)",
+                (item_id, "main", new_val, dom,
+                 old["confidence"] if old["confidence"] is not None else 0.0,
+                 old["provider"] or "human-correction",
+                 old["signal_family"] or "human-correction", time.time()))
+        con.commit(); con.close()
+        applied.append("domain")
+    # 2) 摘要修正：过 L0 收口后落回
+    summ = (correction.get("corrected_summary") or "").strip()
+    if summ:
+        clean = _sum.sanitize_summary(summ)
+        if clean:
+            con = connect()
+            con.execute("UPDATE items SET summary=? WHERE id=?", (clean, item_id))
+            con.commit(); con.close()
+            applied.append("summary")
+    # 3) 记录人的修正意见（含时间戳），状态置 applied
+    rec = dict(correction)
+    rec["at"] = time.time()
+    con = connect()
+    con.execute(
+        "UPDATE feedback_inbox SET human_correction=?, status='applied', "
+        "applied_at=?, read_at=COALESCE(read_at,?) WHERE id=?",
+        (json.dumps(rec, ensure_ascii=False), time.time(), time.time(), fid))
+    con.commit(); con.close()
+    return {"ok": True, "applied": applied, "item_id": item_id}
+
+
+def get_human_correction(fid):
+    """读取某条反馈的人修正意见（dict 或 None）。"""
+    fb = get_feedback(fid)
+    if not fb:
+        return None
+    hc = fb.get("human_correction")
+    if not hc:
+        return None
+    try:
+        return json.loads(hc) if isinstance(hc, str) else hc
+    except (ValueError, TypeError):
+        return None
 
 
 def ignore_dupe_pair(a, b):

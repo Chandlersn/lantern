@@ -299,3 +299,17 @@ function renderGuard(boxId, famId){
     + (g.same_underlying_source? '<br><span class="muted">注：两尺当前同源，独立性为实证量而非结构保证</span>':'');
 }
 
+function renderDomainGuard(boxId, famId){
+  // 领域把关健康度：读 state.metrics.domain_corrected_total（kb.health 提供）
+  const m = (S.state && S.state.metrics) || {};
+  const corrected = m.domain_corrected_total || 0;
+  const domains = m.domains || 0;
+  const cls = corrected === 0 ? 'healthy' : 'warn';
+  const txt = corrected === 0
+    ? '模型已收敛到正确领域边界，无纠正信号。'
+    : `模型累计 ${corrected} 次被判错的领域经守门纠正，边界仍在学习中。`;
+  $(boxId).className = 'guard g-' + cls;
+  $(boxId).innerHTML = `领域纠正信号 <b>${corrected}</b> · 当前 ${domains} 个领域` + `<br>${txt}`;
+  $(famId).innerHTML = '守门契约：DOMAIN_CLASSIFICATION_CONTRACT.md（代表词≥2 才立领域，技术碎片退回主干带）';
+}
+

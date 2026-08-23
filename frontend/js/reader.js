@@ -2,9 +2,34 @@
 /* ---------------- 阅读（存与看协同） ---------------- */
 let rdMode = 'preview';
 let rdRev = null;   // 当前打开正文的内容版本指纹（乐观并发守卫用）
+// 大纲收集器（每次渲染重置）：[{id,text,lv}]
+let rdToc = [];
+function slugify(s, used){
+  // 标题文本 → 稳定且唯一的锚点 id（含中文也能用，但不依赖中文做 id 可读性）
+  let base = (s||'').toLowerCase().replace(/[^\w一-龥]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'h';
+  let id = base, n = 2;
+  while(used.has(id)){ id = base + '-' + n; n++; }
+  used.add(id);
+  return id;
+}
+// 数字序列开头的「短标题」判定：1、 / 1. / 1.2. 这类前缀。
+// 必须是不成句的简短短语（≤30字且整行无句末标点。！？）才算标题；
+// 长句或带句末标点的段落不当标题，避免把正文长句误加粗成小标题。
+function isShortNumberedHeading(t){
+  if(/^\d+(?:\.\d+)*\s*版/.test(t)) return false;   // 版号（1.0版：）交给专门的版号规则
+  const m = t.match(/^\d+(?:\.\d+)*[、.]\s*(.*)$/);
+  if(!m) return false;
+  const rest = m[1] || "";
+  if(t.length > 30) return false;                       // 超长 → 不是标题
+  if(/[。！？!?]$/.test(t)) return false;               // 以句末标点收尾 → 是句子不是标题
+  if(/[。！？!?]/.test(rest)) return false;             // 行内已含句末标点 → 多句/长句
+  return true;
+}
 function renderRdPreview(content){
   // 轻量 Markdown 渲染（先整体转义防注入，再在转义文本上做解析）：
-  // 标题 / 表格 / 列表 / 引用 / 围栏代码块 / 加粗 / 斜体 / 删除线 / 行内代码 / 链接
+  // 标题 / 表格 / 列表 / 引用 / 围栏代码块 / 加粗 / 斜体 / 删除线 / 行内代码 / 链接 / 图片
+  rdToc = [];
+  const used = new Set();
   const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const src = esc(content||'');
   if(!src.trim()) return '<p class="muted">（暂无内容）</p>';
@@ -14,17 +39,28 @@ function renderRdPreview(content){
     .replace(/~~([^~]+)~~/g,'<del>$1</del>')
     .replace(/`([^`]+)`/g,'<code>$1</code>')
     .replace(/\*([^*\n]+)\*/g,'<em>$1</em>')
+    // 图片 ![alt](src)：src 可为 http(s) 或本地相对路径（相对 /articles/ 目录）
+    .replace(/!\[([^\]]*)\]\(((?:https?:\/\/|\.\.?\/|\/)[^)\s]*)\)/g,
+      (m,alt,src2)=>`<img alt="${alt}" src="${src2}" loading="lazy">`)
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
   let html = '', i = 0;
+  const emitHeading = (lv, text)=>{
+    const id = slugify(text.replace(/<[^>]+>/g,''), used);
+    rdToc.push({id, text: text.replace(/<[^>]+>/g,''), lv});
+    html += `<h${lv} id="${id}">${text}</h${lv}>`;
+  };
   while(i < lines.length){
     const t = lines[i].trim();
-    // 围栏代码块 ```...```
+    // 围栏代码块 ```...```（可选语言：```js）
     if(/^```/.test(t)){
+      const lang = t.replace(/^```/,'').trim();
       const buf = [];
       i++;
       while(i < lines.length && !/^```/.test(lines[i].trim())){ buf.push(lines[i]); i++; }
       i++;
-      html += '<pre><code>'+buf.join('\n')+'</code></pre>';
+      const code = buf.join('\n');
+      const copyBtn = `<div class="rd-pre__bar"><button class="rd-pre__copy" type="button" data-code="${encodeURIComponent(code)}">复制</button></div>`;
+      html += `<div class="rd-pre">${copyBtn}<pre><code>${code}</code></pre></div>`;
       continue;
     }
     // 表格块：| a | b |  + 分隔行 |---|---|
@@ -42,19 +78,21 @@ function renderRdPreview(content){
     }
     // 标题 # ~ ######
     const hm = t.match(/^(#{1,6})\s+(.*)$/);
-    if(hm){ const n = hm[1].length; html += `<h${n}>${inline(hm[2])}</h${n}>`; i++; continue; }
+    if(hm){ emitHeading(hm[1].length, inline(hm[2])); i++; continue; }
     // 中文常见小标题（很多文章不用 markdown，直接写「一、」「1、」「1.0版」「为什么……？」）：
     //   一、/（一）→ h3；1、/1.0版：/第X章 → h4；短问句 / 「xx——yy」破折号行 → h4
+    // 数字序列（1、 / 1. ）须是「简短句式」才算标题：长度 ≤30 且整行无句末标点
+    //（不成句的短语），长句或带。！？的段落不当标题（避免把正文长句误加粗）。
     const cn = t.match(/^[一二三四五六七八九十百]+、/) ||
-               t.match(/^\d+、/) ||
                t.match(/^\d+(?:\.\d+)*\s*版/) ||
                t.match(/^第[0-9一二三四五六七八九十百]+[章节部分篇]/) ||
                t.match(/^（[一二三四五六七八九十百]+）/) ||
                t.match(/^[^\n]{1,28}[？?]$/) ||
-               t.match(/^[^\n]{1,14}——[^\n]{0,22}$/);
+               t.match(/^[^\n]{1,14}——[^\n]{0,22}$/) ||
+               isShortNumberedHeading(t);
     if(cn){
       const lv = (/^[一二三四五六七八九十百]+、/.test(t) || /^（[一二三四五六七八九十百]+）/.test(t)) ? 3 : 4;
-      html += `<h${lv}>${inline(t)}</h${lv}>`;
+      emitHeading(lv, inline(t));
       i++; continue;
     }
     // 引用块 > ...（行首 > 已被转义为 &gt;，用转义后的形式匹配）
@@ -64,7 +102,7 @@ function renderRdPreview(content){
       html += '<blockquote>'+buf.map(b=>'<p>'+inline(b)+'</p>').join('')+'</blockquote>';
       continue;
     }
-    // 无序 / 有序列表
+    // 无序 / 有序列表（数字序列若不是短标题才走这里；短标题已在上面 emitHeading）
     const ulm = t.match(/^[-*]\s+(.*)$/), olm = t.match(/^\d+\.\s+(.*)$/);
     if(ulm || olm){
       const tag = ulm ? 'ul' : 'ol', items = [];
@@ -96,6 +134,7 @@ function setRdMode(m){
   rdMode = m;
   $('rdPreview').style.display = (m==='preview') ? '' : 'none';
   $('rdHint').style.display = (m==='preview') ? '' : 'none';
+  const toc = $('rdToc'); if(toc) toc.style.display = (m==='preview' && rdToc.length) ? '' : 'none';
   $('rdEdit').style.display = (m==='edit') ? '' : 'none';
   $('btnRdMode').textContent = (m==='preview') ? '切换到编辑' : '切换到预览';
   if(m==='edit'){ try{ $('rdBody').focus(); }catch(e){} }
@@ -124,6 +163,9 @@ async function renderReader(){
     (it.summary ? `<div class="rd-sum">一句话：${esc(it.summary)}</div>` : '') +
     renderRdPreview(content);
   $('rdPreview').ondblclick = ()=>setRdMode('edit');
+  rewriteRdImages(it.id);        // 正文内相对图片路径 → 后端 asset 接口（受控、防穿越）
+  renderRdToc();                 // 右侧浮动大纲（基于本次渲染收集到的标题）
+  bindRdCopyBtns();              // 代码块「复制」按钮
   setRdMode('preview');
   $('rdChips').innerHTML =
     `<span class="tag">${it.band}</span>`+
@@ -166,8 +208,13 @@ async function renderReader(){
         // 后端已秒回（启发式落库），llm 重算在后台默默跑；前端只局部刷新，不整页重载
         it.title = t;                         // 让知识列表立即反映新标题
         await openReader(it.id);              // 仅重渲染当前 reader（1 次轻量往返，rev 同步刷新）
-        // 后台 llm 整理通常数秒完成：若用户仍停在此文，过一会儿轻量重渲染一下来「默默替换」
-        setTimeout(() => { if (curId === it.id) openReader(it.id); }, 2500);
+        // 后台 llm 整理通常数秒完成：若用户仍处于「编辑态」且仍停在此文，过一会儿轻量重渲染一下来「默默替换」；
+        // 若用户只是只读浏览，则只静默刷新 chips/摘要/关联（不动正文预览、不丢滚动位置）。
+        setTimeout(() => {
+          if (curId !== it.id) return;
+          if (rdMode === 'edit') { openReader(it.id); }
+          else { syncRdMetaOnly(it.id); }
+        }, 2500);
       } else if(rr.conflict){
         // 乐观并发冲突：自打开后正文已被其它改动更新，把抉择权交回用户
         if(confirm('正文版本冲突：自你打开后，内容已被其它改动更新。\n\n'
@@ -275,4 +322,87 @@ function openRdLinkModal(){
   setTimeout(()=>inp.focus(), 0);
 }
 function closeRdLinkModal(){ $('rdLinkModal').setAttribute('aria-hidden', 'true'); }
+
+// ---- 预览增强：右侧浮动大纲 + 代码块复制 + 只读态静默元数据刷新 ----
+
+// 把正文里的相对图片路径改写成受控的 /api/kb/asset 接口（防目录穿越，支持本地配图）
+function rewriteRdImages(itemId){
+  document.querySelectorAll('#rdPreview img').forEach(img=>{
+    const src = img.getAttribute('src') || '';
+    if(/^(https?:|data:|\/api\/)/i.test(src)) return;   // 外链 / dataURI / 已改写 跳过
+    const rel = src.replace(/^\.\//, '');               // 去掉开头的 ./
+    img.setAttribute('src', '/api/kb/asset?id=' + encodeURIComponent(itemId) + '&path=' + encodeURIComponent(rel));
+  });
+}
+
+// 把本次 renderRdPreview 收集的标题渲染成大纲；空则隐藏栏
+function renderRdToc(){
+  const box = $('rdToc');
+  if(!box) return;
+  if(!rdToc.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = '';
+  box.innerHTML = '<div class="rd-toc__title">本文大纲</div>' +
+    rdToc.map(h => `<a href="#${h.id}" class="lv${h.lv}" data-anchor="${h.id}">${esc(h.text)}</a>`).join('');
+  box.querySelectorAll('a').forEach(a=>{
+    a.onclick = (e)=>{
+      e.preventDefault();
+      const el = document.getElementById(a.dataset.anchor);
+      if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); }
+    };
+  });
+  bindRdTocScroll();
+}
+// 大纲滚动高亮当前章节（preview 区在页面内滚动，监听 window scroll）
+let rdTocScrollBound = false;
+function bindRdTocScroll(){
+  if(rdTocScrollBound) return;
+  rdTocScrollBound = true;
+  window.addEventListener('scroll', ()=>{
+    const box = $('rdToc'); if(!box || box.style.display === 'none') return;
+    const heads = rdToc.map(h=>document.getElementById(h.id)).filter(Boolean);
+    if(!heads.length) return;
+    let active = heads[0].id;
+    const y = window.scrollY + 120;
+    for(const h of heads){ if(h.offsetTop <= y) active = h.id; else break; }
+    box.querySelectorAll('a').forEach(a=>a.classList.toggle('active', a.dataset.anchor === active));
+  }, {passive:true});
+}
+// 代码块「复制」按钮：data-code 存了 encodeURIComponent 后的原文
+function bindRdCopyBtns(){
+  document.querySelectorAll('#rdPreview .rd-pre__copy').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const code = decodeURIComponent(btn.dataset.code || '');
+      try{
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(code);
+        } else {
+          const ta = document.createElement('textarea'); ta.value = code;
+          document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+        }
+        const old = btn.textContent; btn.textContent = '已复制'; btn.disabled = true;
+        setTimeout(()=>{ btn.textContent = old; btn.disabled = false; }, 1200);
+      }catch(e){ toast('复制失败'); }
+    };
+  });
+}
+// 只读态：后台 llm 整理完成后只刷新顶部 chips / 摘要 / 关联，不动正文预览、不丢滚动位置
+async function syncRdMetaOnly(id){
+  try{
+    const r = await api('/api/kb/article?id='+id);
+    if(r && r.summary != null){
+      const sumEl = $('rdPreview').querySelector('.rd-sum');
+      const html = r.summary ? `<div class="rd-sum">一句话：${esc(r.summary)}</div>` : '';
+      if(sumEl) sumEl.outerHTML = html; else if(html) $('rdPreview').insertAdjacentHTML('afterbegin', html);
+    }
+    // chips / 路径（基于 cur() 数据，不重刷正文）
+    const it = cur(); if(!it) return;
+    $('rdChips').innerHTML =
+      `<span class="tag">${it.band}</span>`+
+      `<span class="tag">位置 ${it.main_pos}</span>`+
+      `<span class="tag">严密度 ${it.vernier}</span>`+
+      `<span class="tag">偏差 ${it.offset>0?'+':''}${it.offset}</span>`+
+      (r.file_exists ? `<span class="tag">本地文件已同步</span>` : `<span class="tag">本地文件待生成</span>`);
+  }catch(e){ /* 静默失败，不影响阅读 */ }
+}
+
 

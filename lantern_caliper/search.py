@@ -219,15 +219,26 @@ def fts_search(text, k=8):
     con.close()
     return [r["rowid"] for r in rows]
 
-def rebuild_embeddings():
+def rebuild_embeddings(force=False):
     """用 embed_text（模型 embedding 优先、本地哈希兜底）为全部条目重建向量。
     内容哈希缓存由 llm.embed 负责，重复重建不重复计费。
-    注意：embed_text 可能调慢模型，每篇写后立即提交，避免跨模型调用持有写锁。"""
+    注意：embed_text 可能调慢模型，每篇写后立即提交，避免跨模型调用持有写锁。
+    force=False 时跳过已有向量的条目（断点续传：只补缺失项，不重复计算已有项）；
+    force=True 时全量重算（例如切换了底层 embedding 模型后需要整体重建）。"""
     items = list_items()["items"]
     con = connect()
-    done = failed = 0
+    existing = set()
+    if not force:
+        try:
+            existing = {r["item_id"] for r in con.execute("SELECT item_id FROM embeddings")}
+        except Exception:                              # noqa: BLE001
+            existing = set()
+    done = skipped = failed = 0
     dim = None
     for it in items:
+        if it["id"] in existing:
+            skipped += 1
+            continue
         text = ((it.get("title") or "") + "\n" + (it.get("content") or ""))[:2000]
         try:
             v = embed_text(text)
@@ -241,7 +252,7 @@ def rebuild_embeddings():
         except Exception:                              # noqa: BLE001
             failed += 1
     con.close()
-    return {"ok": True, "done": done, "failed": failed, "dim": dim}
+    return {"ok": True, "done": done, "skipped": skipped, "failed": failed, "dim": dim, "forced": force}
 
 def tokenize(text):
     """切成可比较的最小语义单元：英文词 / 数字 / 单个汉字。中文按字切，靠二元组补语序。"""
@@ -324,4 +335,94 @@ def semantic_search(text, k=5):
         scored.append((dot, it))
     scored.sort(key=lambda x: -x[0])
     return [dict(it, score=round(s, 3)) for s, it in scored[:k]]
+
+
+def multidim_search(text="", k=10, band=None, main_min=None, main_max=None,
+                    vernier_min=None, vernier_max=None, tags=None, offset_max=None,
+                    grouped=False):
+    """多维联合检索：把"语义相似度 + 主尺接近度 + 游标接近度 + 领域带匹配 + 标签命中"
+    合成一个综合分，一次返回跨轴结果，而非逐轴拼装。
+
+    维度参数（均可选，留空表示不约束该轴）：
+      text       语义查询（走 embed_text，真模型优先）；为空则纯按维度过滤
+      band       领域带名（如 '自然科学'），只返回该领域
+      main_min/max  主尺位置区间 [main_min, main_max]
+      vernier_min/max 游标深度区间 [vernier_min, vernier_max]
+      tags       标签子集（逗号分隔），命中任一即加分
+      offset_max 逻辑偏差上限，只返回 |offset| <= offset_max 的条目
+
+    综合分 = 0.5*语义(归一) + 0.2*主尺接近 + 0.15*游标接近 + 0.1*领域匹配 + 0.05*标签命中
+    （无 text 时语义权重 redistributes 到维度接近度）。"""
+    items = list_items()["items"]
+    # 语义分：拿全量余弦，归一化到 0-1
+    sem = {}
+    if text:
+        for r in semantic_search(text, k=len(items) or 1):
+            sem[r["id"]] = r.get("score", 0.0)
+        if sem:
+            lo, hi = min(sem.values()), max(sem.values())
+            span = (hi - lo) or 1.0
+            sem = {i: (s - lo) / span for i, s in sem.items()}
+    tag_set = set(t.strip() for t in (tags or "").split(",") if t.strip())
+
+    out = []
+    for it in items:
+        # 维度硬过滤
+        if band and it.get("disp_band") != band:
+            continue
+        mp = it.get("main_pos")
+        if main_min is not None and (mp is None or mp < main_min):
+            continue
+        if main_max is not None and (mp is None or mp > main_max):
+            continue
+        vn = it.get("vernier")
+        if vernier_min is not None and (vn is None or vn < vernier_min):
+            continue
+        if vernier_max is not None and (vn is None or vn > vernier_max):
+            continue
+        if offset_max is not None:
+            off = it.get("offset") or 0
+            if abs(off) > offset_max:
+                continue
+        # 接近度（相对区间中点的归一得分）
+        main_close = 1.0 - min(abs((mp or 50) - ((main_min or 0) + (main_max or 100)) / 2), 50) / 50 if (main_min is not None or main_max is not None) else 0.0
+        vern_close = 1.0 - min(abs((vn or 50) - ((vernier_min or 0) + (vernier_max or 100)) / 2), 50) / 50 if (vernier_min is not None or vernier_max is not None) else 0.0
+        band_hit = 1.0 if (band and it.get("disp_band") == band) else 0.0
+        tag_hit = 0.0
+        if tag_set:
+            it_tags = set(t.strip() for t in (it.get("tags") or "").split(",") if t.strip())
+            tag_hit = 1.0 if (it_tags & tag_set) else 0.0
+        s_sem = sem.get(it["id"], 0.0)
+        if text:
+            score = 0.5 * s_sem + 0.2 * main_close + 0.15 * vern_close + 0.1 * band_hit + 0.05 * tag_hit
+        else:
+            # 无语义查询：权重重分配到维度接近度
+            w_sum = (0.2 + 0.15 + 0.1 + 0.05)
+            score = (0.2 * main_close + 0.15 * vern_close + 0.1 * band_hit + 0.05 * tag_hit) / w_sum if w_sum else 0.0
+        out.append(dict(it, multidim_score=round(score, 4),
+                        semantic_score=round(s_sem, 4),
+                        main_close=round(main_close, 3),
+                        vernier_close=round(vern_close, 3),
+                        band_hit=band_hit, tag_hit=tag_hit))
+    out.sort(key=lambda x: -x["multidim_score"])
+    out = out[:k]
+    # 非线性索引终态：按主题轴（disp_band）聚合，组间按组内最高分降序，
+    # 组内保持综合分序。时间线（条目顺序）降级为组内细节，主题轴升为主键。
+    if grouped:
+        buckets = {}
+        for it in out:
+            b = it.get("disp_band") or "未分类"
+            buckets.setdefault(b, []).append(it)
+        groups = []
+        for b, items in buckets.items():
+            top = max(x["multidim_score"] for x in items)
+            groups.append({
+                "band": b,
+                "count": len(items),
+                "top_score": round(top, 4),
+                "items": items,
+            })
+        groups.sort(key=lambda g: -g["top_score"])
+        return {"groups": groups, "total": len(out)}
+    return out
 

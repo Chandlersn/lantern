@@ -97,8 +97,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception:
             return {}
 
+    def _binary(self, data, code, headers=None):
+        self.send_response(code)
+        if headers:
+            for k, v in headers.items():
+                self.send_header(k, v)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def _respond(self, res):
         if isinstance(res, tuple):
+            if len(res) == 3 and isinstance(res[0], (bytes, bytearray)):
+                data, code, headers = res
+                return self._binary(bytes(data), code, headers)
             payload, code = res
             return self._json(payload, code)
         return self._json(res)

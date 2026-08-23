@@ -122,7 +122,32 @@ def list_concepts():
     con.close()
     return out
 
-def concept_neighbors(item_id, limit=10):
+def tag_concepts_fallback():
+    """LLM 概念层为空时的降级：从 items 的 tags 聚合出"概念雏形"。
+    每个 tag 作为一个概念节点，统计出现次数、平均主尺/游标位置、关联条目。
+    返回结构与 list_concepts 对齐（name/definition/main_pos/vernier/items），
+    使前端概念层网络图始终有数据源。"""
+    items = list_items()["items"]
+    agg = {}
+    for it in items:
+        tags = [t.strip() for t in (it.get("tags") or "").split(",") if t.strip()]
+        for t in tags:
+            a = agg.setdefault(t, {"count": 0, "mp": 0.0, "vn": 0.0, "items": []})
+            a["count"] += 1
+            a["mp"] += (it.get("main_pos") or 50.0)
+            a["vn"] += (it.get("vernier") or 50.0)
+            a["items"].append({"id": it["id"], "title": it.get("title", "")})
+    out = []
+    for name, a in agg.items():
+        n = a["count"]
+        out.append({
+            "id": "tag:" + name, "name": name, "definition": "（标签聚合，自动生成的概念雏形）",
+            "main_pos": round(a["mp"] / n, 1), "vernier": round(a["vn"] / n, 1),
+            "axis_domain": None, "band": None, "source": "tag_fallback",
+            "items": a["items"], "weight": n,
+        })
+    out.sort(key=lambda x: -x.get("weight", 0))
+    return out
     """概念桥接推荐（后端中间件）：通过 concept_links 找与该文档共享概念的其他文档。
 
     返回按共享概念数降序的 [{item_id,title,shared_concepts,score}]。

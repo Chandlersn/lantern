@@ -59,7 +59,7 @@ def detect_health(sim_threshold=0.90):
                           "b": b, "b_title": by_id[b]["title"], "sim": round(sim, 3)})
             note = "两篇语义高度相似，疑似重复或过度耦合；可在条目中合并，或在此标记为非重复。"
             push_feedback(
-                0, f"{by_id[a]['title']} ↔ {by_id[b]['title']}",
+                a, f"{by_id[a]['title']} ↔ {by_id[b]['title']}",
                 by_id[a].get("axis_domain"),
                 {"type": "near_duplicate", "partner": by_id[b]["title"],
                  "partner_id": b, "self_id": a, "sim": round(sim, 3),

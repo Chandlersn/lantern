@@ -6,6 +6,7 @@ import re
 import sqlite3
 import time
 import hashlib
+from . import summarize as _summod
 
 def _global_typical(con):
     """全库常规严密度 = 当前所有条目游标读数的中位数。
@@ -362,6 +363,7 @@ def update_item(item_id, title, content, axis_domain=None, rev=None):
             _set_embedding(c2, item_id, local_embed(content))
             try:
                 s, tg = local_summarize(content)
+                s = _summod.sanitize_summary(s)             # A2 · L0 收口
                 if s:
                     c2.execute("UPDATE items SET summary=?, tags=? WHERE id=?",
                                (s, tg, item_id))
@@ -562,6 +564,7 @@ def add_item(title, content, axis_domain=None):
             _set_embedding(c2, iid, local_embed(content))
             try:
                 s, tg = local_summarize(content)
+                s = _summod.sanitize_summary(s)             # A2 · L0 收口
                 if s:
                     c2.execute("UPDATE items SET summary=?, tags=? WHERE id=?",
                                (s, tg, iid))
@@ -624,7 +627,7 @@ def _refine(item_id, content, axis_domain=None):
                 c.commit(); c.close()
             return
         (band_name, pos, mconf, mprov, mwhy), (depth, vconf, vprov, vwhy) = \
-            measure_pair(content, "llm")
+            measure_pair(content, "llm", item_id=item_id)
         c = connect()
         try:
             now = time.time()
@@ -671,6 +674,7 @@ def _refine(item_id, content, axis_domain=None):
             c2.commit(); c2.close()
         try:
             s, tg = summarize(content)
+            s = _summod.sanitize_summary(s)             # A2 · L0 收口（LLM 结果也过一遍）
             if s:
                 c3 = connect()
                 try:
@@ -855,5 +859,38 @@ def create_draft(title):
         return {"ok": False, "msg": "标题不能为空"}
     it = add_item(title, "（待补充）")      # add_item 已同步落 embedding，发现管线会自动接上
     return {"ok": True, "id": it["id"], "title": title}
+
+
+def item_l0(item_id):
+    """L0 抽象层聚合视图（A3 · 为第 2 层检索/调用留形，不改加载机制）。
+
+    只返回「一眼定位这条知识所需的最小字段」——标题、一句话摘要、学科域、
+    主尺带、标签——**不含正文 content**。未来第 2 层（面向 agent 调用的检索）
+    取 L0 时直接走这个函数，无需回刷历史数据（summary/band/tags 已落库）。
+
+    第 1 层（当前）只负责「存好、把关好」，L0 字段现在就固化成型；
+    第 2 层的 L0/L1/L2 按需下钻机制届时直接消费本视图，不必现在实现。
+    """
+    con = connect()
+    try:
+        row = con.execute(
+            "SELECT id, title, summary, axis_domain, tags "
+            "FROM items WHERE id=?", (item_id,)).fetchone()
+        if not row:
+            return None
+        band = con.execute(
+            "SELECT label FROM readings WHERE item_id=? AND scale='main'",
+            (item_id,)).fetchone()
+        band_name = band["label"] if band else None
+    finally:
+        con.close()
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "summary": row["summary"] or "",
+        "axis_domain": row["axis_domain"] or None,
+        "band": band_name,
+        "tags": [t for t in (row["tags"] or "").split(",") if t],
+    }
 
 

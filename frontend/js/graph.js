@@ -244,6 +244,7 @@ function fmtMD(ts){
 async function graphSelectNode(id){
   GV.selectedEdge=null; GV.selectedNode=id;
   const n=GV.nodes[id]; if(!n) return;
+  if(n.type==='concept'){ graphConceptInspector(id); return; }
   if(n.type==='virtual'){
     $('gDetail').innerHTML = `<div class="det-title">虚节点 · 提到了但还没写</div>
       <div class="det-row">「${esc(n.label)}」在 <b>${esc(n.srcTitle||'')}</b> 里被引用，但库里还没有这篇。</div>
@@ -424,6 +425,7 @@ function graphCloseInspector(){
 }
 /* -------- 图谱渲染（wiki 内容驱动） -------- */
 async function renderGraph(){
+  if(GV && GV.mode==='concept'){ await graphRenderConcepts(); return; }
   let data;
   try { data = await api('/api/graph'); }
   catch(e){ const box=$('gDetail'); if(box) box.innerHTML='<div class="note">图谱数据加载失败</div>'; return; }
@@ -453,6 +455,9 @@ async function renderGraph(){
     const fs=$('btnFindSoft'); if(fs) fs.onclick=async()=>{ fs.disabled=true; fs.textContent='发现中'; try{ const r=await api('/api/soft-links/refresh'); toast(r&&r.written?`发现 ${r.written} 组新关联，已自动接入图谱`:'没有新的关联'); }catch(e){ toast('发现失败'); } finally { fs.disabled=false; fs.textContent='发现共现'; await renderGraph(); } };
     const bc=$('btnConsolidate'); if(bc) bc.onclick=async()=>{ bc.disabled=true; bc.textContent='整理中'; try{ const r=await api('/api/kb/consolidate',{merge_jaccard:0.5}); if(r&&r.merged&&r.merged.length) toast(`已合并 ${r.merged.length} 组近义领域：`+r.merged.map(m=>`${m.dropped}→${m.kept}`).join('，')); else toast('领域已经很干净'); }catch(e){ toast('整理失败'); } finally { bc.disabled=false; bc.textContent='整理领域'; await load(); } };
   }
+  // 概念层切换按钮（独立于 chips 重建，始终可点）
+  const bcl=$('btnConceptLayer');
+  if(bcl && !bcl._bound){ bcl._bound=true; bcl.onclick=()=>{ graphSetMode('concept'); }; }
   graphBind();
   graphSettle(220);
   GV.insetLeft = (GV.selectedNode||GV.selectedEdge) ? INSPECTOR_W : 0;
@@ -526,4 +531,69 @@ async function renderAutoLog(){
     }catch(e){ toast('清理失败'); }
     finally { pb.disabled = false; await renderAutoLog(); }
   };}
+}
+
+/* ---------------- 概念层网络图（B 方向前端） ----------------
+   节点 = 概念（LLM 提取的概念层 / 标签聚合降级），边 = 共享条目共现；
+   复用同一套力导向状态机 GV，只替换数据源。节点大小按出现频次，
+   颜色沿用 bandColor 让概念层与知识图谱视觉连续。*/
+async function graphRenderConcepts(){
+  let data;
+  try { data = await api('/api/concepts'); }
+  catch(e){ const box=$('gDetail'); if(box) box.innerHTML='<div class="note">概念层加载失败</div>'; return; }
+  const concepts = (data && data.concepts) || [];
+  const nodes = {}, edges = [];
+  concepts.forEach(c=>{
+    const id = 'c:' + c.name;
+    nodes[id] = {
+      id, type:'concept', label:c.name, band:c.name,
+      main_pos:c.main_pos, vernier:c.vernier,
+      weight:c.weight || (c.items?c.items.length:1),
+      items:c.items||[], def:c.definition||'', source:c.source,
+    };
+  });
+  const byItem = {};
+  concepts.forEach(c=>{
+    (c.items||[]).forEach(it=>{
+      (byItem[it.id] = byItem[it.id] || []).push('c:' + c.name);
+    });
+  });
+  const seen = new Set();
+  Object.values(byItem).forEach(ids=>{
+    for(let i=0;i<ids.length;i++) for(let j=i+1;j<ids.length;j++){
+      const a=ids[i], b=ids[j], key = a<b?a+'|'+b:b+'|'+a;
+      if(seen.has(key)) continue; seen.add(key);
+      edges.push({id:'ce:'+key, source:a, target:b, kind:'concept', confirmed:true, evidence:[], provenance:'cooccur'});
+    }
+  });
+  const prev = GV ? GV.nodes : {};
+  const merged = {};
+  Object.keys(nodes).forEach(id=>{ merged[id] = Object.assign(nodes[id], (prev[id]&&prev[id].x!=null)?{x:prev[id].x,y:prev[id].y,vx:0,vy:0}:{}); });
+  GV = GV || {};
+  GV.nodes = merged; GV.edges = edges; GV.mode='concept';
+  GV.lens = GV.lens || {}; GV.lens.band = null;
+  GV.selectedNode = null; GV.selectedEdge = null;
+  GV.bound = false;
+  const lgDom=$('gLegendDomains');
+  if(lgDom) lgDom.innerHTML = '<div class="lg"><span class="dot" style="background:#3A5A8C"></span>概念节点（大小=出现频次）</div>'
+    + '<div class="lg"><span class="dot" style="background:#2f6b34"></span>边=共享条目共现</div>';
+  const chips=$('gChips');
+  if(chips){
+    chips.innerHTML = '<button class="chip active" data-f="all">概念层</button>'
+      + '<button class="chip ghost" id="btnBackGraph" title="返回知识图谱">返回图谱</button>'
+      + '<button class="chip ghost" id="btnRelayoutC">重新布局</button>';
+    const bg=$('btnBackGraph'); if(bg) bg.onclick=()=>{ GV.mode='graph'; graphSetMode('graph'); };
+    const rl=$('btnRelayoutC'); if(rl) rl.onclick=()=>{ Object.values(GV.nodes).forEach((n,i)=>{ if(!n.fixed){ const ang=i/Math.max(1,Object.keys(GV.nodes).length)*Math.PI*2; n.x=480+Math.cos(ang)*190+(Math.random()-0.5)*40; n.y=295+Math.sin(ang)*150+(Math.random()-0.5)*40; n.vx=0;n.vy=0; } }); graphReheat(0.7); };
+  }
+  graphBind();
+  graphSettle(220);
+  GV.insetLeft = 0;
+  graphSyncInspector();
+  graphRefit(false);
+  graphReheat(0.4);
+}
+function graphSetMode(mode){
+  GV = GV || {}; GV.mode = mode;
+  if(mode==='concept'){ graphRenderConcepts(); }
+  else { renderGraph(); }
 }

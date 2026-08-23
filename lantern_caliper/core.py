@@ -444,7 +444,7 @@ def remeasure_all(mode):
                     errors.append(f"#{iid}: {e}")
     else:
         for iid, c in jobs:
-            results[iid] = measure_pair(c, mode)
+            results[iid] = measure_pair(c, mode, item_id=iid)
 
     con = connect()
     now = time.time()
@@ -658,6 +658,9 @@ def migrate():
         fcols = [r["name"] for r in con.execute("PRAGMA table_info(feedback_inbox)")]
         if "pushable" not in fcols:
             con.execute("ALTER TABLE feedback_inbox ADD COLUMN pushable INTEGER NOT NULL DEFAULT 1")
+        # feedback_inbox.human_correction：人在同一条反馈下的修正意见（对话式闭环）
+        if "human_correction" not in fcols:
+            con.execute("ALTER TABLE feedback_inbox ADD COLUMN human_correction TEXT")
     except sqlite3.OperationalError:
         pass
     con.commit(); con.close()

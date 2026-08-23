@@ -308,6 +308,55 @@ def fragments(query, filters=None, top_k=8):
             "results": ranked[:top_k]}
 
 
+def _domain_corrected_count():
+    """feedback_inbox 中 type=domain_corrected 的累计条数（模型判错→被守门纠正的信号量）。"""
+    con = store.connect()
+    try:
+        n = con.execute(
+            "SELECT COUNT(*) FROM feedback_inbox "
+            "WHERE json_extract(review,'$.type')='domain_corrected'").fetchone()[0]
+    finally:
+        con.close()
+    return n
+
+
+def selfcheck_domain():
+    """领域把关健康度快照（B4 · 自检命令）。
+
+    回答「领域划分现在对不对、模型累计被守门纠正多少次、是否还有窄域残留」：
+      - band_distribution：全库主尺领域分布（来自 readings.label 真实落库值）
+      - narrow_residual：命中技术碎片黑名单的残留 label（应为空，否则 C1 失守）
+      - domain_corrected：feedback_inbox 中 type=domain_corrected 的累计条数
+        （模型判错→被守门纠正的信号量；0 表示模型已收敛或从未判错）
+      - known_domains：库内已知涌现域数
+    通过 kb_cli 调用：python backend/kb_cli.py selfcheck_domain '{}'
+    """
+    import json as _json
+    con = store.connect()
+    try:
+        dist = {r[0]: r[1] for r in con.execute(
+            "SELECT label, COUNT(*) FROM readings "
+            "WHERE scale='main' AND label IS NOT NULL AND label != '' "
+            "GROUP BY label ORDER BY COUNT(*) DESC")}
+        # 窄域残留：label 直接含技术碎片词（C1 守门应已杜绝）
+        NARROW = ["重叠窗口", "rag", "梯度下降", "向量", "语义分块",
+                  "注意力机制", "损失函数"]
+        narrow = [b for b in dist if any(t in (b or "").lower() for t in NARROW)]
+        # 模型纠正信号量
+        corrected = con.execute(
+            "SELECT COUNT(*) FROM feedback_inbox "
+            "WHERE json_extract(review,'$.type')='domain_corrected'").fetchone()[0]
+    finally:
+        con.close()
+    return {
+        "band_distribution": dist,
+        "narrow_residual": narrow,
+        "domain_corrected_total": corrected,
+        "known_domains": len(dist),
+        "healthy": (len(narrow) == 0),
+    }
+
+
 def health():
     """知识库健康快照（对应 RAG 文章的「运维迭代 / 效果监控」）。
 
@@ -344,6 +393,7 @@ def health():
         "mode": mode,
         "domain_distribution": [{"name": b["name"], "count": b["count"]}
                                 for b in data["bands"]],
+        "domain_corrected_total": _domain_corrected_count(),
     }
 
 

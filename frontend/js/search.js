@@ -45,6 +45,7 @@ function populateBand(){
 
 /* ---------------- 搜索抽屉（右侧滑入竖向，虚化主页，参考工作台） ---------------- */
 let qMode = 'kw';            // kw 关键词 / sem 按意思 / frag 定位段落
+let groupByBand = false;     // 非线性索引原型：检索结果按主题轴（band）分组聚合
 let liveTimer = null;        // 实时搜索防抖
 let liveBox = null;          // 当前可见结果容器
 let liveEls = [];            // 当前结果 DOM 列表（键盘导航用）
@@ -79,13 +80,53 @@ function itemHTML(x){
 function paintResults(box, items){
   liveBox = box; liveEls = [];
   if(!items || !items.length){ box.innerHTML = '<div class="search-empty">没有找到相关内容。</div>'; return; }
+  if(groupByBand){
+    paintGroupedResults(box, items);
+    return;
+  }
   box.innerHTML = items.map(itemHTML).join('');
+  bindResultItems(box);
+  setActive(0,false);
+}
+
+// 非线性索引原型：把扁平结果按主题轴（band）聚合，组间按「组内最高分」排序，
+// 组内保持原相关度序。时间线（条目顺序）降级为组内细节，主题轴升为主键。
+function paintGroupedResults(box, items){
+  const groups = new Map();   // band -> [{item, score}]
+  for(const x of items){
+    const b = x.band || '未分类';
+    if(!groups.has(b)) groups.set(b, []);
+    groups.get(b).push(x);
+  }
+  // 组间排序：组内最高分降序（让最相关的主题簇排在最前）
+  const sortedGroups = [...groups.entries()].sort((a,b)=>{
+    const ma = Math.max(...a[1].map(x=>x.score||0));
+    const mb = Math.max(...b[1].map(x=>x.score||0));
+    return mb - ma;
+  });
+  box.innerHTML = sortedGroups.map(([band, list])=>{
+    const top = Math.max(...list.map(x=>x.score||0));
+    const rows = list.map(itemHTML).join('');
+    return `<div class="search-group" data-band="${esc(band)}">
+      <div class="search-group__head">
+        <span class="search-group__name">${esc(band)}</span>
+        <span class="search-group__count">${list.length} 篇</span>
+        <span class="search-group__top">最高 ${top}</span>
+      </div>
+      <div class="search-group__body">${rows}</div>
+    </div>`;
+  }).join('');
+  bindResultItems(box);
+  setActive(0,false);
+}
+
+// 绑定 .search-item 的点击 / hover（分组与扁平共用）
+function bindResultItems(box){
   box.querySelectorAll('.search-item').forEach((el,i)=>{
     liveEls.push(el);
     el.onclick = ()=>openSearchItem(+el.dataset.id);
     el.onmouseenter = ()=>setActive(i,false);
   });
-  setActive(0,false);
 }
 function setActive(i, scroll){
   if(!liveEls.length) return;
@@ -212,6 +253,14 @@ function initSearchDrawer(){
     modes.querySelectorAll('[data-qm]').forEach(x=>x.classList.toggle('active', x===b));
     if($('qText').value.trim()) doLiveSearch();
   });
+
+  // 非线性索引原型开关：按主题轴（band）分组聚合检索结果
+  const gb = $('qGroupBy');
+  if(gb) gb.onclick = ()=>{
+    groupByBand = !groupByBand;
+    gb.classList.toggle('active', groupByBand);
+    if($('qText').value.trim()) doLiveSearch();
+  };
 
   // 按标签：选择即刷新列表
   const tTag = $('tTag'); if(tTag) tTag.onchange = renderTagList;
