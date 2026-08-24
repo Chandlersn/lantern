@@ -27,7 +27,7 @@ lessons from any reverts — sits together instead of being scattered across dai
 
 ```
 <memory-root>/
-├── MEMORY.md              # INDEX only: dual-table (经验沉淀 + 创新思想), each row w/ one-line summary + consensus + env constants
+├── MEMORY.md              # INDEX + 跨功能铁律/共识 + 环境常量 + 功能详档指针（详档下沉 functions/，本文件只留指针，控体积防注入截断）
 ├── functions/             # one file per feature/module — 经验沉淀（具体环节精髓）
 │   └── <feature-name>.md  # full iterative history, date as small tag
 ├── insights/             # 创新优化思想 — 可通用升华，蒸馏自 functions/
@@ -111,6 +111,18 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    and the trade-off it resolves. Keep it to one sentence. It must NOT contain
    feature iteration detail (that lives in the linked file).
 
+   **Three-layer duty + detail-sink discipline.** MEMORY.md's job is exactly
+   three things: (1) the dual-table index with one-line summaries; (2)
+   cross-cutting 铁律/共识 — decision-level rules shared across features, which
+   is the *legitimate* "通病记录" zone; (3) env constants. It must NOT host a
+   feature's *detailed argumentation* (derivations, API lists, domain-taxonomy
+   deep-dives) — those belong in the corresponding `functions/<name>.md`, and
+   MEMORY.md reaches them via a single 「功能详档索引」 pointer section. **Keep
+   it light**: an overgrown MEMORY.md gets truncated by the host's context
+   injection (observed in practice — the second half was silently dropped,
+   hurting retrieval). Sink detail, trim long passages; if it grows past ~80
+   lines / ~10KB, refactor.
+
 6. **Discipline for future writes.** When adding new work notes, append an
    iteration block to the relevant `functions/<name>.md` and add one line to the
    daily decision thread. Do NOT fall back to date-chained narrative.
@@ -125,6 +137,16 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    inside a function file's iteration block. When in doubt, ask: "is this an
    operation I'd re-run, or a principle I'd re-apply?" — the former → functions/,
    the latter → insights/.
+
+8. **Dependency direction: functions own the detail, never reverse-link to
+   MEMORY.md's detail.** A `functions/<name>.md` MUST be self-contained: its
+   "当前稳定状态" and any 「设计论证 / 详档」 section live *in the file*, never
+   as "详见 MEMORY.md「xxx 详档」". MEMORY.md points DOWN to functions (index →
+   detail); functions may point UP to MEMORY.md's *cross-cutting 铁律/共识*
+   (that is a healthy index link), but never to a detail block that should have
+   stayed in functions. If you find a function file saying "详见 MEMORY.md" for
+   detail, the detail was mis-placed — move it back into the function file and
+   leave MEMORY.md a pointer.
 
 ## Naming conventions
 
@@ -143,7 +165,13 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
 3. Rewrite each touched daily log to the slim decision-thread format with links.
 4. Build/update the MEMORY.md index table; move any cross-cutting rules into the
    consensus section.
-5. Leave OLD prototype-era logs untouched unless the user asks — they may be
+5. **Refactor/收口 if MEMORY.md grew a "功能详档" belly or functions reverse-link
+   to it.** Symptoms: MEMORY.md holds derivation/API deep-dives, or a function
+   file says "详见 MEMORY.md「xxx 详档」". Fix: move the detail into the
+   function file's 「设计论证」 section, replace MEMORY.md's copy with a
+   「功能详档索引」 pointer line, and back up MEMORY.md first. This keeps the
+   index light and the dependency one-directional (MEMORY → functions).
+6. Leave OLD prototype-era logs untouched unless the user asks — they may be
    obsolete and merging them can confuse the current architecture. Offer to
    extract only still-valid parts on request.
 
@@ -157,7 +185,10 @@ Function file (分区一 · 经验沉淀):
 > 聚合 <功能名> 功能区迭代。相关代码：<path1>、<path2>。
 
 ## 当前稳定状态（截至 YYYY-MM-DD）
-- <present behavior bullet>
+- <present behavior bullet; 可一句话指向本文件「设计论证」段>
+
+## 设计论证 / 详档（自含于本文件，严禁"详见 MEMORY.md"回指）
+- <该功能的完整推导 / API 列表 / 领域谱系 / 配置契约等；MEMORY.md 仅以「功能详档索引」指针指向本文件>
 
 ## [YYYY-MM-DD 时段] 动因
 **动因**：<why>
