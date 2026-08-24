@@ -17,22 +17,28 @@ import sys
 from datetime import date
 
 PRINCIPLE = (
-    "记忆组织原则：短期日志只记「当日决策脉络」，功能区的完整迭代历史下沉到 "
-    "functions/<功能名>.md，由 MEMORY.md 做索引。不要再在同一功能上用日期串联记流水账——"
-    "同一功能区的迭代就该聚合在一起，时间线退为每段的小标注。"
+    "记忆组织原则：① 短期日志只记「当日决策脉络」，功能区的完整迭代历史下沉到 "
+    "functions/<功能名>.md，由 MEMORY.md 做索引；② 性质二分——经验沉淀(具体环节精髓)归 "
+    "functions/，创新优化思想(可通用升华)归 insights/，两区互补不重复。不要再在同一功能上用"
+    "日期串联记流水账——同一功能区的迭代就该聚合在一起，时间线退为每段的小标注。"
 )
 
 MEMORY_MD = """# 长期记忆（功能索引）
 
-> 组织原则：按功能区聚合迭代，不按日期记流水账。每条功能的完整迭代历史放在
-> `functions/<功能名>.md`，本文件只做索引 + 跨功能共识。每日 `.md` 流水账仅保留
-> 「当日决策脉络」，细节已下沉到对应功能文件，避免重复。
+> 组织原则：① 按功能区聚合迭代，不按日期记流水账；② 性质二分——经验沉淀(具体环节精髓)
+> 归 functions/，创新优化思想(可通用升华)归 insights/，两区互补不重复。MEMORY.md 做双表索引。
 
-## 功能模块索引
+## 分区一 · 经验沉淀（具体环节精髓 → functions/）
 
 | 功能模块 | 迭代记录 | 状态 |
 |---|---|---|
 | （示例）某功能 | [functions/某功能.md](functions/某功能.md) | 待补充 |
+
+## 分区二 · 创新优化思想（可通用·思想迭代升华 → insights/）
+
+| 思想主题 | 思想文件 | 源于（蒸馏自） |
+|---|---|---|
+| （示例）某思想 | [insights/某思想.md](insights/某思想.md) | [functions/某功能.md](functions/某功能.md) |
 
 ## 跨功能共识 / 设计原则
 
@@ -85,6 +91,7 @@ def main() -> int:
     print(f"初始化记忆结构于: {root}")
     ensure_dir(root)
     ensure_dir(os.path.join(root, "functions"))
+    ensure_dir(os.path.join(root, "insights"))
 
     write_if_missing(
         os.path.join(root, "MEMORY.md"),

@@ -1,6 +1,6 @@
 ---
 name: memory-function-org
-description: This skill should be used when organizing, writing, or refactoring long-term/project memory files (.workbuddy/memory or ~/.workbuddy/MEMORY.md). It enforces a "function-area aggregation" memory structure where each feature's iterative history lives in its own file under functions/, indexed by MEMORY.md, instead of date-chronological stream-of-consciousness logs. Use it whenever the user asks to "summarize experience", "organize memory", "consolidate notes", or when about to write substantive work notes that should be retrievable later.
+description: This skill should be used when organizing, writing, or refactoring long-term/project memory files (.workbuddy/memory or ~/.workbuddy/MEMORY.md). It enforces a "function-area aggregation" memory structure where each feature's iterative history lives in its own file under functions/, indexed by MEMORY.md, instead of date-chronological stream-of-consciousness logs. On top of that it enforces a NATURE DICHOTOMY: concrete operational experience goes to functions/ (经验沉淀), while generalizable thought iterations distilled from that work go to insights/ (创新优化思想) — two complementary zones, never mixed. Use it whenever the user asks to "summarize experience", "organize memory", "consolidate notes", or when about to write substantive work notes that should be retrievable later.
 agent_created: true
 ---
 
@@ -27,15 +27,42 @@ together instead of being scattered across daily files.
 
 ```
 <memory-root>/
-├── MEMORY.md              # INDEX only: function table + cross-cutting consensus + env constants
-├── functions/             # one file per feature/module
+├── MEMORY.md              # INDEX only: dual-table (经验沉淀 + 创新思想) + consensus + env constants
+├── functions/             # one file per feature/module — 经验沉淀（具体环节精髓）
 │   └── <feature-name>.md  # full iterative history, date as small tag
+├── insights/             # 创新优化思想 — 可通用升华，蒸馏自 functions/
+│   └── <insight-theme>.md
 └── YYYY-MM-DD.md          # daily log: DECISION THREAD only (links to functions/)
 ```
 
 - `<memory-root>` = project memory dir (e.g. `D:/测试/.workbuddy/memory/`) or
   user-level `~/.workbuddy/MEMORY.md` for cross-project facts.
 - To bootstrap a new project's memory, run `scripts/init_memory.py <memory-root>`.
+
+## Nature Dichotomy (性质二分)
+
+On top of function-area aggregation, every memory root is split into TWO
+complementary zones by the *nature* of the content. This keeps retrieval/calling
+from ever mixing "how-to detail" with "general principle":
+
+- **分区一 · 经验沉淀 (`functions/`)** — concrete, operational essence.
+  - **What goes here**: 某功能「怎么做」/ 某 bug 根因与修法 / 某配置如何配 / 某接口契约。
+  - **Call scenario**: 复现某功能、排障、回想某条配置或命令。
+  - **File shape**: `# 功能迭代记录：<名>` + 分区标签 + 当前稳定状态 + 迭代块。
+
+- **分区二 · 创新优化思想 (`insights/`)** — generalizable thought iterations,
+  distilled UP from concrete work.
+  - **What goes here**: 可复用的设计哲学、优化方向、跨功能的原则
+    （如 中立化原则、引擎自主 vs 被动镜像、边界清晰解耦、硬链软链区分）。
+  - **Call scenario**: 做新设计决策、选优化方向、权衡取舍时查阅。NOT 用于回想操作步骤。
+  - **File shape**: `# 创新优化思想：<主题>` + 分区标签 + 「源于（蒸馏自）」回链到
+    对应 `functions/` 文件 + 核心原则 / 思想迭代 / 可迁移场景 / 待观察。
+
+**Why it lowers, not raises, retrieval cost**: MEMORY.md's dual table pre-filters
+"should I go to `functions/` or `insights/`" at a glance, and calling routes by
+task type (reproduce/troubleshoot → `functions/`, new-design/optimize →
+`insights/`). The two zones are complementary, not duplicative — `insights/`
+never restates how-to steps; `functions/` never speculates on general principles.
 
 ## Rules (the constraints that make it work)
 
@@ -74,6 +101,17 @@ together instead of being scattered across daily files.
    iteration block to the relevant `functions/<name>.md` and add one line to the
    daily decision thread. Do NOT fall back to date-chained narrative.
 
+7. **Nature dichotomy by content, not just by feature.** A feature's operational
+   iteration always lives in `functions/<name>.md`. When a piece of work yields a
+   *generalizable* principle (not tied to one feature's mechanics), distill it
+   into a separate `insights/<theme>.md` and link back to its source function
+   file(s) via 「源于（蒸馏自）」. Keep the two zones complementary:
+   `functions/` = how-to detail, `insights/` = generalizable thought. Do NOT
+   duplicate how-to steps into `insights/`, and do NOT bury general principles
+   inside a function file's iteration block. When in doubt, ask: "is this an
+   operation I'd re-run, or a principle I'd re-apply?" — the former → functions/,
+   the latter → insights/.
+
 ## Naming conventions
 
 - Feature file name = short Chinese/English slug of the module, e.g.
@@ -97,10 +135,11 @@ together instead of being scattered across daily files.
 
 ## Skeleton templates
 
-Function file:
+Function file (分区一 · 经验沉淀):
 ```
 # 功能迭代记录：<功能名>
 
+> **分区**：经验沉淀（具体环节精髓） | **调用场景**：回顾某功能「怎么做 / 某 bug 根因与修法 / 某配置如何配」时查阅。
 > 聚合 <功能名> 功能区迭代。相关代码：<path1>、<path2>。
 
 ## 当前稳定状态（截至 YYYY-MM-DD）
@@ -115,6 +154,9 @@ Function file:
 
 ## 待观察 / 未决
 - <item>
+
+## 相关思想升华（可通用原则）
+- <主题> → [insights/<主题>.md](../insights/<主题>.md)
 ```
 
 Daily log:
@@ -128,4 +170,23 @@ Daily log:
 
 ## 跨日待观察
 - <risk>
+```
+
+Insight file (分区二 · 创新优化思想):
+```
+# 创新优化思想：<主题>
+
+> **分区**：创新优化思想（可通用·思想迭代升华） | **调用场景**：做新设计决策 / 选优化方向 / 权衡取舍时查阅。 | **源于（蒸馏自）**：[functions/xxx.md](../functions/xxx.md)
+
+## 核心原则
+- <principle, stated concretely>
+
+## 思想迭代
+- <how this thought evolved / what it replaced>
+
+## 可迁移场景
+- <where else it applies beyond the source feature>
+
+## 待观察
+- <open / what to validate next>
 ```
