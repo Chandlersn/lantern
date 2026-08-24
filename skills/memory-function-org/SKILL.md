@@ -32,7 +32,7 @@ lessons from any reverts — sits together instead of being scattered across dai
 │   └── <feature-name>.md  # full iterative history, date as small tag
 ├── insights/             # 创新优化思想 — 可通用升华，蒸馏自 functions/
 │   └── <insight-theme>.md
-└── YYYY-MM-DD.md          # daily log: DECISION THREAD only (links to functions/)
+└── YYYY-MM-DD.md          # TRANSIENT scratch: decision-thread only; deleted after distillation (Rule 9)
 ```
 
 - `<memory-root>` = project memory dir (e.g. `D:/测试/.workbuddy/memory/`) or
@@ -80,6 +80,12 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    - A "当日决策脉络" list: each item is `<short phrase> → [functions/x.md](...)`.
    - A "跨日待观察" section: open risks/observations (detail lives in function files).
    No detailed how/why in the daily log — that goes in the function file.
+
+   The daily log is TRANSIENT scratch for capturing-as-you-work, NOT a permanent
+   archive. Once its content is distilled into `functions/` (+ `insights/` if a
+   principle emerged), DELETE the daily-log file (Rule 9). Never keep both the
+   stream and the distilled version — that duplication is exactly what this skill
+   exists to prevent.
 
 3. **Function file shape.** Each `functions/<name>.md`:
    - Starts with a one-line scope line naming related code paths.
@@ -148,6 +154,17 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    detail, the detail was mis-placed — move it back into the function file and
    leave MEMORY.md a pointer.
 
+9. **Delete distilled originals — no backup/archive step.** After a stream log's
+   content is fully captured in `functions/` (+ `insights/` where a principle
+   emerged) — including its date-tagged iteration blocks — DELETE the original
+   stream file. The distilled files are the durable record; keeping the raw
+   stream alongside them is the exact duplication this skill exists to prevent.
+   Do NOT add a backup or move-to-archive step: a copy of data you've judged
+   redundant just relocates the waste, it does not eliminate it. The only guard
+   is **verifying distillation is complete** — every decision/fact in the stream
+   must already live in `functions/` or `insights/`. If you are unsure it is all
+   captured, finish distilling first; never "back up then delete anyway."
+
 ## Naming conventions
 
 - Feature file name = short Chinese/English slug of the module, e.g.
@@ -169,11 +186,14 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    to it.** Symptoms: MEMORY.md holds derivation/API deep-dives, or a function
    file says "详见 MEMORY.md「xxx 详档」". Fix: move the detail into the
    function file's 「设计论证」 section, replace MEMORY.md's copy with a
-   「功能详档索引」 pointer line, and back up MEMORY.md first. This keeps the
+   「功能详档索引」 pointer line. This keeps the
    index light and the dependency one-directional (MEMORY → functions).
-6. Leave OLD prototype-era logs untouched unless the user asks — they may be
-   obsolete and merging them can confuse the current architecture. Offer to
-   extract only still-valid parts on request.
+6. **After distilling a stream log, DELETE it — no archive, no backup.** Once a
+   daily/stream log's decisions and facts all have a home in `functions/`
+   (± `insights/`), delete the original file. The distilled files ARE the durable
+   record; retaining the raw stream too is duplication. Do NOT move it to an
+   `archive/` folder either — that only relocates the redundancy. (Guard: verify
+   distillation is complete before deleting; see Rule 9.)
 
 ## Skeleton templates
 
