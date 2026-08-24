@@ -28,7 +28,7 @@ if ROOT not in sys.path:
 import lantern_caliper as store
 import kb
 
-SERVER_INFO = {"name": "lantern-kb", "version": "1.0.0"}
+SERVER_INFO = {"name": "lantern-kb", "version": "1.1.0"}
 PROTOCOL_VERSION = "2024-11-05"
 
 
