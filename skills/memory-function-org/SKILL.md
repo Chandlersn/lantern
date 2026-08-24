@@ -27,7 +27,7 @@ together instead of being scattered across daily files.
 
 ```
 <memory-root>/
-├── MEMORY.md              # INDEX only: dual-table (经验沉淀 + 创新思想) + consensus + env constants
+├── MEMORY.md              # INDEX only: dual-table (经验沉淀 + 创新思想), each row w/ one-line summary + consensus + env constants
 ├── functions/             # one file per feature/module — 经验沉淀（具体环节精髓）
 │   └── <feature-name>.md  # full iterative history, date as small tag
 ├── insights/             # 创新优化思想 — 可通用升华，蒸馏自 functions/
@@ -64,6 +64,11 @@ task type (reproduce/troubleshoot → `functions/`, new-design/optimize →
 `insights/`). The two zones are complementary, not duplicative — `insights/`
 never restates how-to steps; `functions/` never speculates on general principles.
 
+**Each index row carries a one-line summary** (like a Skill's `description`
+field): a single sentence stating what the doc is about or the problem it
+solves, so you can judge relevance *without opening the file*. This is what
+makes the index fast and accurate to call — you scan summaries, not filenames.
+
 ## Rules (the constraints that make it work)
 
 1. **Functions over dates as the spine.** Never write a feature's iteration
@@ -90,12 +95,21 @@ never restates how-to steps; `functions/` never speculates on general principles
    After migrating, compress the old daily-log detail into a link reference to
    avoid dual maintenance.
 
-5. **MEMORY.md is an index, not a notebook.** It contains:
+5. **MEMORY.md is an index, not a notebook — and every index row carries a
+   one-line summary.** It contains:
    - The organization principle (first time).
-   - A function-module table: `| 功能模块 | 迭代记录 | 状态 |`.
+   - A function-module table with a summary column:
+     `| 功能模块 | 一句话摘要 / 关键问题 | 迭代记录 | 状态 |`.
+   - An insights table with a summary column:
+     `| 思想主题 | 一句话摘要 / 解决什么取舍 | 思想文件 | 源于（蒸馏自） |`.
    - Cross-cutting consensus (design principles shared across features).
    - Env constants that are easy to forget (ports, DB paths, startup commands).
-   It must NOT contain feature iteration detail.
+   The one-line summary is the KEY discipline: treat it like a Skill's
+   `description` field — it must let you decide *whether to open the file*
+   without reading it. For `functions/` rows, state what the feature does or
+   the bug/config pitfall it records; for `insights/` rows, state the principle
+   and the trade-off it resolves. Keep it to one sentence. It must NOT contain
+   feature iteration detail (that lives in the linked file).
 
 6. **Discipline for future writes.** When adding new work notes, append an
    iteration block to the relevant `functions/<name>.md` and add one line to the
