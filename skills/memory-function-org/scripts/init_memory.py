@@ -6,7 +6,8 @@ Usage:
 
 Creates (idempotently):
     <memory-root>/MEMORY.md          index + principle + env-constant stub
-    <memory-root>/functions/         feature-iteration directory
+    <memory-root>/functions/         feature-iteration directory (经验沉淀)
+    <memory-root>/insights/          insights directory (创新优化思想)
     <memory-root>/YYYY-MM-DD.md      slim daily-log template with principle note
 
 Existing files are never overwritten; the script only writes what is missing

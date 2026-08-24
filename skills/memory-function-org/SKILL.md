@@ -12,8 +12,8 @@ Replace date-chronological memory logs (stream-of-consciousness "流水账") wit
 **function-area aggregation** structure. Every feature/module gets ONE file that
 accumulates its full iterative history; the date timeline degrades to a small
 `[YYYY-MM-DD]` tag per iteration. This makes memory far easier for an agent to
-retrieve and reuse: a feature's正反迭代 (why-changed / reverted lessons) sits
-together instead of being scattered across daily files.
+retrieve and reuse: a feature's two-sided iteration — why it changed and the
+lessons from any reverts — sits together instead of being scattered across daily files.
 
 ## When to Use
 
