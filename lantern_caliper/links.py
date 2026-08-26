@@ -330,6 +330,56 @@ def discover_semantic_links(threshold=None, persist=False):
     out.sort(key=lambda x: -x["score"])
     return {"suggestions": out, "threshold": threshold}
 
+def prune_stale_semantic_links(threshold=None):
+    """持续回算并清理陈旧的语义软链（治愈"链接写一次定终身 + 无 staleness 回算"缺陷）。
+
+    语义链依赖可信的高维 embedding；一旦向量被重建（换模型 / force 重建）或条目被改，
+    当年那条"这两篇很像"的推断可能早就不成立——而 discover_semantic_links 跳过已连对、
+    rebuild_embeddings 从不失效链接，于是陈旧边会一直挂在图谱上。这里把每条语义链接当作
+    Unit，用「当前 embeddings 重算余弦」作外部锚逐条回算：
+      · 任一端缺失向量 → 孤儿，删；
+      · 两端向量维度不一致（跨维，无共同比较基准）→ 失效，删；
+      · 两端都在、同维、但余弦 < 门槛 → 假阳性，删（仅当信号 healthy 时，
+        避免 embedding 退化时把本来成立的链误删）。
+    返回清理计数，供 rebuild_embeddings / refresh_soft_links 调用与审计。"""
+    if threshold is None:
+        threshold = 0.62
+    con = connect()
+    links = con.execute(
+        "SELECT src_item_id,dst_item_id FROM links WHERE provenance='semantic'").fetchall()
+    vecs = {r["item_id"]: json.loads(r["vec"])
+            for r in con.execute("SELECT item_id,vec FROM embeddings")}
+    con.close()
+    if not links:
+        return {"pruned": 0, "reason": {"orphan": 0, "cross_dim": 0, "below_threshold": 0}}
+    # 低于门槛的删除只在信号 healthy 时执行：退化向量下余弦不可信，宁可保留也不误删
+    sig = signal_integrity(use_cache=True)
+    healthy = sig.get("status") == "healthy"
+    orphan = cross_dim = below = 0
+    del_pairs = []
+    for l in links:
+        s, d = l["src_item_id"], l["dst_item_id"]
+        vs, vd = vecs.get(s), vecs.get(d)
+        if vs is None or vd is None:
+            orphan += 1; del_pairs.append((s, d)); continue
+        if len(vs) != len(vd):
+            cross_dim += 1; del_pairs.append((s, d)); continue
+        if healthy:
+            dot = sum(a * b for a, b in zip(vs, vd))
+            na = math.sqrt(sum(x * x for x in vs)) or 1.0
+            nb = math.sqrt(sum(y * y for y in vd)) or 1.0
+            if dot / (na * nb) < threshold:
+                below += 1; del_pairs.append((s, d)); continue
+    if del_pairs:
+        con = connect()
+        for s, d in del_pairs:
+            con.execute(
+                "DELETE FROM links WHERE src_item_id=? AND dst_item_id=? AND provenance='semantic'",
+                (int(s), int(d)))
+        con.commit(); con.close()
+    return {"pruned": len(del_pairs),
+            "reason": {"orphan": orphan, "cross_dim": cross_dim, "below_threshold": below}}
+
 def confirm_soft_link(src, dst):
     """用户确认一条软边 → 标记 confirmed=1（仍保留 kind='soft' 以示来源）。"""
     con = connect()
@@ -356,11 +406,13 @@ def refresh_soft_links():
     经 _discovery_lock 串行化，避免与写后自动发现或周期扫描并发重算互相踩。
     返回细分计数；**不在此处写 auto_log**（由调用方 sweeper / 按钮统一记审计）。"""
     sig = enforce_signal_guard()        # 重算前先据信号质量自动挂起/恢复语义链
+    pruned = prune_stale_semantic_links()   # 持续回算：先清陈旧语义链，再重发现
     with _discovery_lock:
         co = suggest_links(persist=True)
         se = discover_semantic_links(persist=True)
         br = discover_bridge_links(persist=True)
     return {"ok": True,
+            "pruned_semantic": pruned.get("pruned", 0),
             "written": len(co.get("suggestions", [])) + len(se.get("suggestions", [])) + br.get("written", 0),
             "cooccur_written": len(co.get("suggestions", [])),
             "semantic_written": len(se.get("suggestions", [])),

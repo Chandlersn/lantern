@@ -251,8 +251,18 @@ def rebuild_embeddings(force=False):
             done += 1
         except Exception:                              # noqa: BLE001
             failed += 1
+    # 重建向量后，旧语义链（尤其换模型 / 维度变化时）可能早已失效 → 持续回算清理，
+    # 避免"链接写一次定终身"。仅当真动了向量（force 或本次有新增）时才扫，省去无谓开销。
+    pruned = 0
+    if force or done > 0:
+        try:
+            p = prune_stale_semantic_links()
+            pruned = (p or {}).get("pruned", 0)
+        except Exception:                              # noqa: BLE001
+            pruned = 0
     con.close()
-    return {"ok": True, "done": done, "skipped": skipped, "failed": failed, "dim": dim, "forced": force}
+    return {"ok": True, "done": done, "skipped": skipped, "failed": failed,
+            "dim": dim, "forced": force, "pruned_semantic": pruned}
 
 def tokenize(text):
     """切成可比较的最小语义单元：英文词 / 数字 / 单个汉字。中文按字切，靠二元组补语序。"""

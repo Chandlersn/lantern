@@ -272,6 +272,127 @@ class TestLinksPure(unittest.TestCase):
 
 
 # ======================================================================
+# links.py —— 语义软链持续回算（prune_stale_semantic_links）
+# 治愈"链接写一次定终身 + 无 staleness 回算"缺陷：把每条语义链当 Unit，用
+# 当前向量重算余弦，清孤儿 / 跨维 / 低分（低分仅在信号 healthy 时删）。
+# 全部跑在临时库上，绝不触碰仓库真实的 lantern.db。
+# ======================================================================
+class TestPruneStaleSemanticLinks(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="lantern_prune_")
+        self.old_db = store.core.DB_PATH
+        store.core.DB_PATH = os.path.join(self.tmp, "lantern.db")
+        store.init(force=True)
+        con = store.connect()
+        con.execute("DELETE FROM items")
+        con.execute("DELETE FROM readings")
+        con.execute("DELETE FROM embeddings")
+        con.execute("DELETE FROM links")
+        con.commit(); con.close()
+
+    def tearDown(self):
+        store.core.DB_PATH = self.old_db
+
+    def _seed(self, items, links):
+        """items: list[(id, main, vernier, vec|None)]  links: list[(src, dst)] 语义链。"""
+        mp, vp = store.MAIN_PROVIDER, store.VERNIER_PROVIDER
+        con = store.connect()
+        for (i, main, vernier, vec) in items:
+            con.execute(
+                "INSERT INTO items(id,title,content,created_at) VALUES(?,?,?,?)",
+                (i, "T%d" % i, "C%d" % i, 0.0))
+            con.execute(
+                "INSERT INTO readings(item_id,scale,value,label,confidence,"
+                "provider,signal_family,revised,computed_at) VALUES(?,?,?,?,?,?,?,0,?)",
+                (i, "main", main, None, 1.0, mp["id"], mp["signal_family"], 0.0))
+            con.execute(
+                "INSERT INTO readings(item_id,scale,value,label,confidence,"
+                "provider,signal_family,revised,computed_at) VALUES(?,?,?,?,?,?,?,0,?)",
+                (i, "vernier", vernier, None, 1.0, vp["id"], vp["signal_family"], 0.0))
+            if vec is not None:
+                con.execute("INSERT INTO embeddings(item_id,vec) VALUES(?,?)",
+                            (i, json.dumps(vec)))
+        for (s, d) in links:
+            con.execute(
+                "INSERT INTO links(src_item_id,dst_item_id,kind,evidence,confirmed,provenance,created_at)"
+                " VALUES(?,?,?,?,?,?,?)", (s, d, "soft", None, 1, "semantic", 0.0))
+        con.commit(); con.close()
+
+    def _count_semantic(self):
+        con = store.connect()
+        n = con.execute(
+            "SELECT COUNT(*) c FROM links WHERE provenance='semantic'").fetchone()["c"]
+        con.close()
+        return n
+
+    def _prune(self):
+        # 强制 signal_integrity 重算（绕过 TTL 缓存），避免跨测试缓存串味：
+        # 注入层的 _signal_cache 与 guard 模块实际变量是不同绑定，直接改无效，
+        # 故用 use_cache=False 触发 guard 内部真正重写缓存。
+        store.signal_integrity(use_cache=False)
+        return store.prune_stale_semantic_links()
+
+    def test_keeps_valid_high_cosine(self):
+        """同维、余弦≥门槛、信号 healthy → 保留。"""
+        self._seed(
+            [(1, 12.5, 40, [1, 0, 0, 0]),
+             (2, 37.5, 50, [1, 0, 0, 0]),   # 与 1 完全相同 → cos=1
+             (3, 62.5, 60, [0, 1, 0, 0])],  # 正交，凑够 healthy 样本
+            [(1, 2)])
+        self.assertEqual(self._count_semantic(), 1)
+        res = self._prune()
+        self.assertEqual(res["pruned"], 0)
+        self.assertEqual(self._count_semantic(), 1)
+
+    def test_removes_cross_dim(self):
+        """两端向量维度不一致（跨维，无共同基准）→ 失效删除。"""
+        self._seed(
+            [(1, 12.5, 40, [1, 0, 0, 0]),
+             (2, 37.5, 50, [1, 0, 0, 0, 0, 0, 0, 0])],  # dim8
+            [(1, 2)])
+        self.assertEqual(self._count_semantic(), 1)
+        res = self._prune()
+        self.assertEqual(res["pruned"], 1)
+        self.assertEqual(res["reason"]["cross_dim"], 1)
+        self.assertEqual(self._count_semantic(), 0)
+
+    def test_removes_low_similarity_when_healthy(self):
+        """同维、余弦<门槛、信号 healthy → 假阳性删除。"""
+        self._seed(
+            [(1, 12.5, 40, [1, 0, 0, 0]),
+             (2, 37.5, 50, [0, 1, 0, 0]),   # 与 1 正交 → cos=0
+             (3, 62.5, 60, [0, 0, 1, 0])],  # 凑 healthy 样本
+            [(1, 2)])
+        self.assertEqual(self._count_semantic(), 1)
+        res = self._prune()
+        self.assertEqual(res["pruned"], 1)
+        self.assertEqual(res["reason"]["below_threshold"], 1)
+        self.assertEqual(self._count_semantic(), 0)
+
+    def test_removes_orphan_missing_vector(self):
+        """任一端缺向量 → 孤儿删除。"""
+        self._seed(
+            [(1, 12.5, 40, [1, 0, 0, 0]),
+             (2, 37.5, 50, None)],          # 无向量
+            [(1, 2)])
+        self.assertEqual(self._count_semantic(), 1)
+        res = self._prune()
+        self.assertEqual(res["pruned"], 1)
+        self.assertEqual(res["reason"]["orphan"], 1)
+        self.assertEqual(self._count_semantic(), 0)
+
+    def test_empty_is_noop(self):
+        """无语义链 → 直接返回 0，不报错。"""
+        self._seed([(1, 12.5, 40, [1, 0, 0, 0]),
+                    (2, 37.5, 50, [0, 1, 0, 0]),
+                    (3, 62.5, 60, [0, 0, 1, 0])], [])
+        res = self._prune()
+        self.assertEqual(res["pruned"], 0)
+        self.assertEqual(self._count_semantic(), 0)
+
+
+# ======================================================================
 # 并发写入串行化复核（报告 P0 第 2 条）
 # 验证：多线程各自 connect() 并发写 items 不出现 "database is locked"；
 #       多个 refresh_soft_links（共用 _discovery_lock）并发也串行化不卡死。

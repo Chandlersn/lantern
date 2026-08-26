@@ -85,6 +85,8 @@ def build_graph():
     con = connect()
     links = con.execute(
         "SELECT src_item_id,dst_item_id,kind,evidence,confirmed,provenance FROM links").fetchall()
+    vecs = {r["item_id"]: json.loads(r["vec"])
+            for r in con.execute("SELECT item_id,vec FROM embeddings")}
     con.close()
     node_map = {}
     for it in items:
@@ -106,6 +108,18 @@ def build_graph():
         s, d = l["src_item_id"], l["dst_item_id"]
         if s not in node_map or d not in node_map:
             continue
+        provenance = l["provenance"] or ("author" if l["kind"] == "hard" else "cooccur")
+        # 渲染兜底：语义链依赖可比的高维 embedding；两端缺向量 / 跨维 / 低相似度
+        # 一律不渲染，避免画出无效连线（治愈"links 无 staleness 回算"导致陈旧边照渲）。
+        if provenance == "semantic":
+            vs, vd = vecs.get(s), vecs.get(d)
+            if not vs or not vd or len(vs) != len(vd):
+                continue
+            dot = sum(a * b for a, b in zip(vs, vd))
+            na = math.sqrt(sum(x * x for x in vs)) or 1.0
+            nb = math.sqrt(sum(y * y for y in vd)) or 1.0
+            if dot / (na * nb) < 0.62:
+                continue
         edges.append({
             "source": s, "target": d, "kind": l["kind"],
             "confirmed": l["confirmed"],
