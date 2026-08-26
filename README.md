@@ -1,6 +1,6 @@
 <p align="center">
   
-  <img src="./docs/images/readme/hero.svg" width="100%" alt="灯笼 · 多维轴知识库：基于游标卡尺双尺度定位的知识引擎。">
+  <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/images/readme/hero.svg" width="100%" alt="灯笼 · 多维轴知识库：基于游标卡尺双尺度定位的知识引擎。">
   
 </p>
 
@@ -40,7 +40,7 @@
   
     <td align="center" valign="top">
   
-      <img src="./docs/shots/overview.png" width="100%" alt="总览视图截图"/>  
+      <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/shots/overview.png" width="100%" alt="总览视图截图"/>  
 
   
       <b>① 总览</b>  
@@ -56,7 +56,7 @@
   
     <td align="center" valign="top">
   
-      <img src="./docs/shots/knowledge.png" width="100%" alt="知识库视图截图"/>  
+      <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/shots/knowledge.png" width="100%" alt="知识库视图截图"/>  
 
   
       <b>② 知识库</b>  
@@ -72,7 +72,7 @@
   
     <td align="center" valign="top">
   
-      <img src="./docs/shots/visualize.png" width="100%" alt="逻辑偏差·坐标地图截图"/>  
+      <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/shots/visualize.png" width="100%" alt="逻辑偏差·坐标地图截图"/>  
 
   
       <b>③ 逻辑偏差 · 坐标地图</b>  
@@ -84,7 +84,7 @@
   
 
   
-      <img src="./docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/>  
+      <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/>  
 
   
       <b>③ 偏差地图</b>  
@@ -100,7 +100,7 @@
   
     <td align="center" valign="top">
   
-      <img src="./docs/shots/graph.png" width="100%" alt="知识图谱视图截图"/>  
+      <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/shots/graph.png" width="100%" alt="知识图谱视图截图"/>  
 
   
       <b>④ 知识图谱</b>  
@@ -116,7 +116,7 @@
   
     <td align="center" valign="top">
   
-      <img src="./docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/>  
+      <img src="https://cdn.jsdelivr.net/gh/Chandlersn/lantern@main/docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/>  
 
   
       <b>⑤ 灵感碎片</b>  
