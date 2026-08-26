@@ -118,6 +118,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # ------------------------------------------------------------- GET
     def do_GET(self):
         p = urlparse(self.path)
+        if p.path.startswith("/attachments/"):
+            return self._serve_attachment(p.path[len("/attachments/"):])
         if not p.path.startswith("/api/"):
             return super().do_GET()               # 静态前端资源
         try:
@@ -129,6 +131,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._json({"error": str(e)}, 500)
 
     # ------------------------------------------------------------ POST
+    # ----------------------------------------------------- 全局附件（图片/视频，借 Joplin/Logseq「附件同仓」模型）
+    def _serve_attachment(self, name):
+        import urllib.parse
+        name = urllib.parse.unquote((name or "").split("?")[0])
+        if not name or "/" in name or "\\" in name or name.startswith(".") or ".." in name:
+            return self._json({"error": "非法文件名"}, 400)
+        if not re.search(r"\.(png|jpe?g|gif|webp|svg|bmp|ico|mp4|webm|ogg|mov|pdf)$", name, re.I):
+            return self._json({"error": "不支持的文件类型"}, 400)
+        base = os.path.join(ROOT, "attachments")
+        full = os.path.normpath(os.path.join(base, name))
+        if not os.path.abspath(full).startswith(os.path.abspath(base)):
+            return self._json({"error": "越权访问"}, 403)
+        if not os.path.exists(full):
+            return self._json({"error": "资源不存在"}, 404)
+        ctype = {"png":"image/png","jpg":"image/jpeg","jpeg":"image/jpeg","gif":"image/gif",
+                 "webp":"image/webp","svg":"image/svg+xml","bmp":"image/bmp","ico":"image/x-icon",
+                 "mp4":"video/mp4","webm":"video/webm","ogg":"video/ogg","mov":"video/quicktime",
+                 "pdf":"application/pdf"}.get(name.rsplit(".",1)[-1].lower(), "application/octet-stream")
+        try:
+            with open(full, "rb") as f:
+                data = f.read()
+        except Exception as e:
+            return self._json({"error": str(e)}, 500)
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_POST(self):
         p = urlparse(self.path)
         try:

@@ -51,7 +51,7 @@
 
 ---
 
-## 工具清单（29 个）
+## 工具清单（38 个）
 
 ### 人类定义 / 配置（构成逻辑）
 | 工具 | 说明 |
@@ -100,11 +100,24 @@
 | `kb_state` | 知识库总览（条目数 / 候选边 / 独立性检验 / provider 模式 / LLM 状态） |
 | `kb_health` | 健康自检（领域分布 / 耦合 / 漂移预警） |
 | `kb_calibrate` | 对指定条目运行阴阳闭环校准（碰撞 unresolved 时 Agent 可调用） |
+| `kb_reconcile` | 以学科域(axis_domain)为语义锚，把条目主尺位置收敛回该域所属主干带中心，消除「主尺带与学科域相冲突」的错位；保留游标(vernier)不动，残留偏移视为深度相对学科域典型的信号。 |
 
 ### 向量与维护
 | 工具 | 说明 |
 |------|------|
 | `kb_embed_rebuild` | 重建 embedding 索引（换模型或索引损坏后） |
+
+### 灵感孵化闭环（sparks）
+| 工具 | 说明 |
+|------|------|
+| `kb_sparks` | 列出灵感碎片（最上游原料层，无坐标随手记）。可传 status 过滤（raw/incubating/hatched），用于查看待孵化原料或已孵化溯源。 |
+| `kb_add_spark` | 捕获一条灵感碎片（真正的知识出发点）。content 为随手记想法，title/tags 可选；刻意不做双尺度投影，投影在孵化时由 kb_hatch_spark 完成。 |
+| `kb_update_spark` | 编辑一条灵感碎片（content/title/tags 任一可改，不给则不改）。碎片与知识条目互相独立，已孵化的碎片也允许在此改原始记录。 |
+| `kb_hatch_spark` | 智能孵化灵感碎片：冗余闸门→投影富化→全库关联发现(以新节点为中心写软边)→反馈轴自检→簇血缘→事件日志。返回决策/关联数/反馈/兄弟等报告。 |
+| `kb_draft_hatch` | 智能孵化·阶段一：对灵感碎片生成「碰撞创作草稿」（结合知识库相关内容合成，不落库）。落库请再调 kb_commit_hatch。 |
+| `kb_commit_hatch` | 智能孵化·阶段二：用户微调草稿后确认入库。content 为用户编辑后的正文（必填）；按冗余闸门自动决定并入既有条目或新建。返回六阶段完整报告。 |
+| `kb_spark_clusters` | 灵感碎片的离线聚类萌发：关键词共现把相近碎片聚成主题簇，只呈现结构、不下结论；供决定哪些该孵化。 |
+| `kb_hatch_stats` | 智能孵化事件聚合：总孵化数、按决策(new/merged)分布、按学科域分布、近 7 天趋势、累计关联发现/反馈/簇血缘数。供 Skill 据以校准轴绩点。 |
 
 ---
 
@@ -191,7 +204,7 @@ python backend/server.py        # 监听 127.0.0.1:8731
 }
 ```
 
-任何 MCP 客户端执行 `initialize` → `tools/list` 即可发现上述 29 个工具，
+任何 MCP 客户端执行 `initialize` → `tools/list` 即可发现上述 38 个工具，
 用 `tools/call` 调用，参数为 `arguments`（与 REST 请求体同构）。
 返回 `content[0].text` 为 JSON 字符串（与 REST 返回体同构）。
 
@@ -231,7 +244,7 @@ python backend/kb_cli.py <tool> '<json-args>'
 ```
 
 脚本自切换 cwd 到仓库根，直接读 `lantern.db`，**不依赖 `backend/server.py` 在线**。
-`python kb_cli.py list` 列出全部 29 个工具名；其余用法与 MCP 工具一一对应。
+`python kb_cli.py list` 列出全部 38 个工具名；其余用法与 MCP 工具一一对应。
 
 典型"联合使用"：接到知识相关任务 → `kb_schema` 看坐标空间 → `kb_query`/`kb_context` 取知识喂推理
 → `kb_relate`/`kb_traverse` 顺藤摸瓜 → 新知识产出用 `kb_add` 入库定位。

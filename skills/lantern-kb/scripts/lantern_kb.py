@@ -8,7 +8,7 @@
 
 用法：
     python lantern_kb.py <tool> '<json-args>'
-    python lantern_kb.py list          # 列出全部 29 个 kb_* 工具
+    python lantern_kb.py list          # 列出全部 kb_* 工具（当前 38 个，以 list 输出为准）
 
 可用环境变量 LANTERN_KB_DIR 显式指定仓库根（含 kb_cli.py 的目录）。
 """

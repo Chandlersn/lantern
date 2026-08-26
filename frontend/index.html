@@ -97,7 +97,7 @@
           <h2>知识条目 <span class="muted" id="kbCount"></span></h2>
           <p class="desc">点任意一行可打开阅读，也能在里面修改。</p>
           <table id="kbTable">
-            <thead><tr><th>标题</th><th>领域</th><th>位置</th><th>严密度</th><th>偏差</th><th></th></tr></thead>
+            <thead><tr><th>标题</th><th>领域</th><th>位置</th><th>严密度</th><th>偏差</th><th>最近更新</th><th></th></tr></thead>
             <tbody id="kbBody"></tbody>
           </table>
           <div id="kbPager" class="pager"></div>
@@ -162,6 +162,8 @@
             <textarea id="rdBody" style="min-height:280px;"></textarea>
             <div class="row end" style="margin-top:8px;gap:8px;">
               <button class="soft" id="btnRdLink" title="在正文光标处插入 [[标题]] 互链">插入互链</button>
+              <button class="soft" id="btnRdImage" title="上传图片/视频并插入正文">插入图片</button>
+              <input type="file" id="rdFile" accept="image/*,video/*" style="display:none">
               <button class="soft" id="btnRdCancel">取消</button>
               <button id="btnRdSave">保存修改</button>
             </div>

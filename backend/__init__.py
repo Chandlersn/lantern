@@ -8,7 +8,7 @@
 
   · server.py        HTTP 服务：REST API 路由表 + 静态前端托管
   · routes.py        REST 路由表与 handler（与 HTTP 传输层解耦）
-  · kb.py            Agent 工具门面（29 个 kb_* 工具，REST / MCP / CLI 同源）
+  · kb.py            Agent 工具门面（38 个 kb_* 工具，REST / MCP / CLI 同源）
   · kb_cli.py        命令行直连入口（无需服务在线，直接读 lantern.db）
   · mcp_server.py    MCP stdio 入口（server 名 lantern-kb）
   · seed_demo.py     合成演示数据生成器

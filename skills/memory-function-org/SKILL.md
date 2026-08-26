@@ -1,6 +1,6 @@
 ---
 name: memory-function-org
-description: "This skill should be used when organizing, writing, or refactoring long-term/project memory files (.workbuddy/memory or ~/.workbuddy/MEMORY.md). It enforces a 'function-area aggregation' memory structure where each feature's iterative history lives in its own file under functions/, indexed by MEMORY.md, instead of date-chronological stream-of-consciousness logs. On top of that it enforces a NATURE DICHOTOMY - concrete operational experience goes to functions/ (经验沉淀), while generalizable thought iterations distilled from that work go to insights/ (创新优化思想), two complementary zones never mixed. Use it whenever the user asks to 'summarize experience', 'organize memory', 'consolidate notes', or when about to write substantive work notes that should be retrievable later."
+description: Memory organizer: function-area aggregation + nature dichotomy for .workbuddy/memory & ~/.workbuddy/MEMORY.md. Routes how-to → functions/, generalizable principles → insights/. Use on "总结记忆/整理笔记/沉淀经验" or before writing substantive work notes that should stay retrievable.
 agent_created: true
 ---
 
@@ -8,12 +8,16 @@ agent_created: true
 
 ## Purpose
 
-Replace date-chronological memory logs (stream-of-consciousness "流水账") with a
-**function-area aggregation** structure. Every feature/module gets ONE file that
-accumulates its full iterative history; the date timeline degrades to a small
-`[YYYY-MM-DD]` tag per iteration. This makes memory far easier for an agent to
-retrieve and reuse: a feature's two-sided iteration — why it changed and the
-lessons from any reverts — sits together instead of being scattered across daily files.
+Replace the **date-as-skeleton** memory habit (stream-of-consciousness "流水账"
+where the *date itself* is the organizing spine) with a **function-area
+aggregation** structure. Date-named `YYYY-MM-DD.md` files are *kept* but
+**demoted to lightweight decision-thread logs** — the date is no longer the
+skeleton, only a per-day audit tag; all detail sinks into `functions/<name>.md`.
+Every feature/module gets ONE file that accumulates its full iterative history;
+the date timeline degrades to a small `[YYYY-MM-DD]` tag per iteration block. This
+makes memory far easier for an agent to retrieve and reuse: a feature's
+two-sided iteration — why it changed and the lessons from any reverts — sits
+together instead of being scattered across daily files.
 
 ## When to Use
 
@@ -32,12 +36,13 @@ lessons from any reverts — sits together instead of being scattered across dai
 │   └── <feature-name>.md  # full iterative history, date as small tag
 ├── insights/             # 创新优化思想 — 可通用升华，蒸馏自 functions/
 │   └── <insight-theme>.md
-└── YYYY-MM-DD.md          # TRANSIENT scratch: decision-thread only; deleted after distillation (Rule 9)
+└── YYYY-MM-DD.md          # daily log: DECISION THREAD only (permanent, links to functions/)
 ```
 
 - `<memory-root>` = project memory dir (e.g. `D:/测试/.workbuddy/memory/`) or
   user-level `~/.workbuddy/MEMORY.md` for cross-project facts.
 - To bootstrap a new project's memory, run `scripts/init_memory.py <memory-root>`.
+- To lint a memory root against these rules, run `scripts/check_memory.py <memory-root>`.
 
 ## Nature Dichotomy (性质二分)
 
@@ -75,17 +80,22 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    history as a date-keyed section. Ask: "which `functions/<name>.md` does this
    belong to?" then append an iteration block there.
 
-2. **Daily log = decision thread only.** `YYYY-MM-DD.md` holds at most:
-   - A one-line principle note (first time only).
+2. **Daily log = permanent lightweight decision-thread / audit log.** `YYYY-MM-DD.md`
+   is a **permanent** per-day audit log (think git log), NOT a transient scratch —
+   it is retained, just slimmed. It holds at most:
+   - A one-line principle note (written ONCE when the memory root is first
+     initialized — NOT per daily log).
    - A "当日决策脉络" list: each item is `<short phrase> → [functions/x.md](...)`.
    - A "跨日待观察" section: open risks/observations (detail lives in function files).
    No detailed how/why in the daily log — that goes in the function file.
-
-   The daily log is TRANSIENT scratch for capturing-as-you-work, NOT a permanent
-   archive. Once its content is distilled into `functions/` (+ `insights/` if a
-   principle emerged), DELETE the daily-log file (Rule 9). Never keep both the
-   stream and the distilled version — that duplication is exactly what this skill
-   exists to prevent.
+   **Lifecycle of 跨日待观察**: an open item lives in the day it was raised. Once
+   resolved, record the outcome as an iteration block (with 判据) in the relevant
+   `functions/<name>.md` and **mark the log entry `✅ 已消解 → functions/x.md`**; do
+   NOT re-carry it into later logs (that would duplicate, violating Rule 4). A still-
+   open item may be re-listed the next day if still active — but never copied
+   verbatim every day. (Re-listing implies glancing at yesterday's 跨日待观察
+   before writing today's log, so you carry forward only still-open items, not
+   resolved ones.)
 
 3. **Function file shape.** Each `functions/<name>.md`:
    - Starts with a one-line scope line naming related code paths.
@@ -93,8 +103,16 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
      behavior, so a reader gets the present state without reading history).
    - Then iteration blocks, each headed `## [YYYY-MM-DD 时段] 动因`, containing
      **动因 / 根因 / 改动 / 判据 / 待观察** as applicable. Timeline is a tag, not
-     the skeleton.
-   - Ends with `## 待观察 / 未决` for open items.
+     the skeleton. **Iteration blocks are appended in CHRONOLOGICAL order to the
+     file tail (earliest on top, newest at bottom) — append-only, never re-sort.**
+   - The `## 待观察 / 未决` section comes after the iteration blocks; a
+     `## 相关思想升华（可通用原则）` section may follow it (see template). Full
+     order: stable-state → 设计论证 → iteration blocks (chrono) → 待观察/未决 →
+     相关思想升华.
+   - **Guardrail (正序布局的两头动代价)**: appending a new iteration block MUST be
+     paired with refreshing the head `## 当前稳定状态` summary (and its 截至 date).
+     Never update one without the other, or the file drifts into 改头忘尾 — the
+     newest iteration and the stated stable state silently disagree.
 
 4. **Single source of truth per feature.** If the same fact appears in two
    places, the function file owns it; the daily log and MEMORY.md only link.
@@ -103,7 +121,7 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
 
 5. **MEMORY.md is an index, not a notebook — and every index row carries a
    one-line summary.** It contains:
-   - The organization principle (first time).
+   - The organization principle (written once, at first memory-root init).
    - A function-module table with a summary column:
      `| 功能模块 | 一句话摘要 / 关键问题 | 迭代记录 | 状态 |`.
    - An insights table with a summary column:
@@ -128,6 +146,11 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    injection (observed in practice — the second half was silently dropped,
    hurting retrieval). Sink detail, trim long passages; if it grows past ~80
    lines / ~10KB, refactor.
+
+   **Index-expansion pre-plan**: when the function-module table exceeds **~40
+   rows**, split it into `### 索引·<域>` sub-sections (e.g. `### 索引·知识库`,
+   `### 索引·前端`, `### 索引·流程`); keep 铁律/共识 + env constants pinned at
+   the top, ungrouped. This caps index-scanning cost without dropping rows.
 
 6. **Discipline for future writes.** When adding new work notes, append an
    iteration block to the relevant `functions/<name>.md` and add one line to the
@@ -154,16 +177,56 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    detail, the detail was mis-placed — move it back into the function file and
    leave MEMORY.md a pointer.
 
-9. **Delete distilled originals — no backup/archive step.** After a stream log's
-   content is fully captured in `functions/` (+ `insights/` where a principle
-   emerged) — including its date-tagged iteration blocks — DELETE the original
-   stream file. The distilled files are the durable record; keeping the raw
-   stream alongside them is the exact duplication this skill exists to prevent.
-   Do NOT add a backup or move-to-archive step: a copy of data you've judged
-   redundant just relocates the waste, it does not eliminate it. The only guard
-   is **verifying distillation is complete** — every decision/fact in the stream
-   must already live in `functions/` or `insights/`. If you are unsure it is all
-   captured, finish distilling first; never "back up then delete anyway."
+9. **Function-file size guard — the system must shrink, not only grow.**
+   A `functions/<name>.md` is append-only for iteration blocks, but it must NOT
+   grow without bound. When a file exceeds **~30KB** (≈ 10K 汉字 / ≈300 行),
+   compress: fold the OLDEST iteration blocks into a single
+   `## 历史演进摘要` block that keeps only 动因 + 结论 (drop the step-by-step
+   过程 / 判据 verbatim), so the live file keeps the recent iterations + stable
+   state and the early history becomes one evolution paragraph. The
+   `当前稳定状态` summary and the most recent iterations always stay verbatim.
+   (Pairs with Rule 5's MEMORY.md refactor line: both layers now have a cap, so
+   the system has a forgetting mechanism instead of only growth — this closes
+   the only structural risk the lean rewrite introduced.)
+
+10. **Rename / merge linkage (no orphaned references).** When you rename a
+    `functions/<name>.md` or merge two into one:
+    - Update the MEMORY.md index row (name + link) for every affected feature.
+    - `Grep` the whole memory root for the old filename and rewrite each link
+      (in daily logs, other function files, insights「源于」backlinks).
+    - If merging, keep the *target* file as canonical and mark the absorbed
+      file's header `> ⚠️ 已并入 <target>.md` (then drop it per Rule 4).
+    Never leave a link pointing at a filename that no longer exists.
+
+11. **Cross-function work lives in ONE primary file (no duplication).** When a
+    piece of work touches several features, archive it under the *primary*
+    feature's `functions/<name>.md` and add a `## 相关` cross-link to the others;
+    if it is genuinely cross-cutting rather than feature-bound, give it its own
+    `functions/<topic>.md`. Do NOT copy the same iteration block into multiple
+    feature files — that reintroduces the dual-maintenance Rule 4 bans.
+
+12. **Insights have a lifecycle (they can be superseded).** An insight that is
+    overtaken or falsified gets a header `> ⚠️ 已过时 · 被 <newer insight> 取代`
+    and a `## 状态` line stating what replaced it; keep it (history has value) but
+    move it to the BOTTOM of `insights/`. When you write the superseding insight,
+    link back from the old one to the new. Do NOT delete insights — deletion hides
+    why a past decision was made.
+
+13. **Consensus vs insights — keep the cut sharp.** They sound similar, so:
+    - **共识 / 铁律** = a constraint we *must uphold across all features* (the
+      "what we will not violate"): decision-level, binding, rarely changes.
+    - **insights/** = a *generalizable principle distilled from one feature's work*
+      (the "how we evolved our thinking"): reusable lesson, may be superseded
+      (Rule 12).
+    If a statement is universally binding → consensus; if it's a transferable
+    lesson from specific work → insights. Never restate the same idea in both as
+    if they were different rules.
+
+14. **User-level memory (`~/.workbuddy/MEMORY.md`) is coarse-only.** Same dual-table
+    index + 铁律/共识 + env constants, but holds ONLY *cross-project* facts
+    (habits, preferences, shared env). It must NOT host per-feature iteration
+    detail — that stays in each project's `functions/`. If a principle is
+    cross-project, record it once in user-level 共识, not duplicated per project.
 
 ## Naming conventions
 
@@ -186,14 +249,23 @@ makes the index fast and accurate to call — you scan summaries, not filenames.
    to it.** Symptoms: MEMORY.md holds derivation/API deep-dives, or a function
    file says "详见 MEMORY.md「xxx 详档」". Fix: move the detail into the
    function file's 「设计论证」 section, replace MEMORY.md's copy with a
-   「功能详档索引」 pointer line. This keeps the
-   index light and the dependency one-directional (MEMORY → functions).
-6. **After distilling a stream log, DELETE it — no archive, no backup.** Once a
-   daily/stream log's decisions and facts all have a home in `functions/`
-   (± `insights/`), delete the original file. The distilled files ARE the durable
-   record; retaining the raw stream too is duplication. Do NOT move it to an
-   `archive/` folder either — that only relocates the redundancy. (Guard: verify
-   distillation is complete before deleting; see Rule 9.)
+   「功能详档索引」 pointer line, and back up MEMORY.md first (**to a temp path
+   OUTSIDE the memory root**, e.g. the OS temp dir — Windows `%TEMP%`, macOS/Linux
+   `/tmp`: `MEMORY.md.bak-<timestamp>`). After the
+   refactor is verified, **delete that backup** — never leave a `.bak` inside the
+   memory root, or future scans/injections will read a duplicate index (the exact
+   redundancy Rule 4 forbids). This keeps the index light and the dependency
+   one-directional (MEMORY → functions).
+6. Leave OLD **prototype-era** logs untouched unless the user asks — they may be
+   obsolete and merging them can confuse the current architecture. **Definition**:
+   "prototype-era" = logs produced under an abandoned/legacy architecture (e.g.
+   the pre-refactor single-axis Electron 头脑风暴, or the old 6-column KV schema),
+   identifiable by the legacy architecture name mentioned inside, or by a date
+   before the lantern-caliper restructure baseline, or simply by user designation.
+   **Marking**: any retained prototype-era log MUST carry a header line
+   `> ⚠️ 原型期遗留，勿并入当前架构` (or be moved into a `legacy/` subdir) so it is
+   never mistakenly merged into current `functions/`. Offer to extract only
+   still-valid parts on request.
 
 ## Skeleton templates
 
@@ -228,13 +300,14 @@ Daily log:
 ```
 # YYYY-MM-DD 工作日志
 
-> 记忆组织原则：短期日志只记决策脉络，细节下沉 functions/，由 MEMORY.md 索引。
+> 记忆组织原则：轻量审计日志只记决策脉络，细节下沉 functions/，由 MEMORY.md 索引。
 
 ## 当日决策脉络
 - <短短语> → [functions/x.md](functions/x.md)
 
 ## 跨日待观察
-- <risk>
+- <risk / open item，细节在对应 functions/ 文件>
+- ✅ 已消解 → functions/x.md   # 解决后回标：结果（含判据）已写入对应功能文件迭代块，本日志不再携带
 ```
 
 Insight file (分区二 · 创新优化思想):

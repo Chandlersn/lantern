@@ -9,7 +9,8 @@
     python backend/kb_cli.py kb_query '{"text":"不完备 形式系统"}'
     python backend/kb_cli.py kb_context '{"query":"哥德尔 不完备","top_k":3}'
 
-所有 kb.py 的 TOOLS（13 个）均可通过此入口调用，输出 JSON（ensure_ascii=False）。
+所有 kb.py 的 TOOLS 均可通过此入口调用，输出 JSON（ensure_ascii=False）。
+工具总数随 kb.py 演进变化，当前实测 38 个，以 `python backend/kb_cli.py list` 输出为准（勿在此写死数字）。
 调用前会切换到仓库根目录，以保证 lantern.db / .env 等相对路径被正确解析。
 """
 import sys

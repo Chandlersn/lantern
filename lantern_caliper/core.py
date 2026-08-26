@@ -112,7 +112,8 @@ CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT NOT NULL,
   content TEXT NOT NULL,
-  created_at REAL NOT NULL
+  created_at REAL NOT NULL,
+  updated_at REAL
 );
 CREATE TABLE IF NOT EXISTS readings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -627,6 +628,8 @@ def migrate():
         ("summary", "ALTER TABLE items ADD COLUMN summary TEXT"),
         ("tags", "ALTER TABLE items ADD COLUMN tags TEXT"),
         ("alias", "ALTER TABLE items ADD COLUMN alias TEXT"),
+        ("updated_at", "ALTER TABLE items ADD COLUMN updated_at REAL"),
+        ("source_url", "ALTER TABLE items ADD COLUMN source_url TEXT"),
     ]:
         if col not in cols:
             try:
@@ -635,6 +638,8 @@ def migrate():
                 pass
     # 旧条目别名回填：取首次入库时的标题固化，避免后续改标题断链
     con.execute("UPDATE items SET alias=title WHERE alias IS NULL OR alias=''")
+    # 旧条目「最近更新」回填：存量数据无该字段，初始化为创建时间，变化可追溯
+    con.execute("UPDATE items SET updated_at=created_at WHERE updated_at IS NULL")
     # links 补列（旧库可能缺 kind/evidence/confirmed/provenance）
     lcols = {r[1] for r in con.execute("PRAGMA table_info(links)")}
     for col, ddl in [

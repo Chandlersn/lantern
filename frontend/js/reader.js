@@ -25,6 +25,39 @@ function isShortNumberedHeading(t){
   if(/[。！？!?]/.test(rest)) return false;             // 行内已含句末标点 → 多句/长句
   return true;
 }
+const escAttr = s => (s==null?'':(''+s)).replace(/"/g,'&quot;');
+// 时间戳 → 可读「日期 时间（相对）」，用于「创建于 / 最近更新」展示
+function fmtWhen(ts){
+  if(!ts) return '—';
+  const d = new Date(ts*1000);
+  const p = n => (n<10?'0':'')+n;
+  const date = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  const time = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  const diff = (Date.now() - ts*1000)/1000;
+  let rel = '';
+  if(diff < 3600) rel = '刚刚';
+  else if(diff < 86400) rel = Math.floor(diff/3600)+'小时前';
+  else if(diff < 86400*30) rel = Math.floor(diff/86400)+'天前';
+  else if(diff < 86400*365) rel = Math.floor(diff/86400/30)+'个月前';
+  return `${date} ${time}` + (rel?`（${rel}）`:'');
+}
+// 富媒体内嵌：把视频链接 / @[provider](url) 语法转为响应式 16:9 容器
+// （借用 markdown-it-video / Ejunz 的「URL→embed」解析范式：YouTube/Bilibili 取 ID，直链走 <video>）
+function videoEmbed(rawUrl){
+  if(!rawUrl) return null;
+  const url = rawUrl.trim();
+  if(/\.(?:mp4|webm|ogg|mov)(?:\?.*)?$/i.test(url)){
+    return `<div class="rd-media"><video controls preload="metadata" src="${escAttr(url)}">您的浏览器不支持视频播放。</video></div>`;
+  }
+  let m, src=null;
+  if((m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/))){
+    src = 'https://www.youtube.com/embed/'+m[1];
+  } else if((m = url.match(/bilibili\.com\/video\/(BV[A-Za-z0-9]+)/i)) || (m = url.match(/[?&]bvid=(BV[A-Za-z0-9]+)/i))){
+    src = 'https://player.bilibili.com/player.html?bvid='+m[1]+'&amp;page=1&amp;high_quality=1';
+  }
+  if(!src) return null;
+  return `<div class="rd-media"><iframe src="${escAttr(src)}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen loading="lazy" referrerpolicy="no-referrer"></iframe></div>`;
+}
 function renderRdPreview(content){
   // 轻量 Markdown 渲染（先整体转义防注入，再在转义文本上做解析）：
   // 标题 / 表格 / 列表 / 引用 / 围栏代码块 / 加粗 / 斜体 / 删除线 / 行内代码 / 链接 / 图片
@@ -42,7 +75,17 @@ function renderRdPreview(content){
     // 图片 ![alt](src)：src 可为 http(s) 或本地相对路径（相对 /articles/ 目录）
     .replace(/!\[([^\]]*)\]\(((?:https?:\/\/|\.\.?\/|\/)[^)\s]*)\)/g,
       (m,alt,src2)=>`<img alt="${alt}" src="${src2}" loading="lazy">`)
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // 库内互链 [[标题]] / [[标题|别名]]（借用 Obsidian wikilink 约定）：转可点击、命中标蓝、未命中朱砂虚线
+    .replace(/\[\[([^\]\n]+?)(?:\|([^\]\n]+?))?\]\]/g, (m, t, alias) => {
+      const rawTitle = t.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim();
+      const rawDisp  = alias ? alias.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim() : rawTitle;
+      const exists = (typeof S!=='undefined' && S && S.items || []).some(it => it.title === rawTitle);
+      const cls = exists ? 'rd-wikilink' : 'rd-wikilink rd-wikilink--missing';
+      const attrSafe = t.replace(/"/g,'&quot;');        // t 已被 esc() 转义过 &<> ，此处只补引号
+      const dispSafe = alias ? alias.replace(/"/g,'&quot;') : attrSafe;
+      return `<a class="${cls}" data-title="${attrSafe}" href="javascript:void(0)">${dispSafe}</a>`;
+    });
   let html = '', i = 0;
   const emitHeading = (lv, text)=>{
     const id = slugify(text.replace(/<[^>]+>/g,''), used);
@@ -117,6 +160,10 @@ function renderRdPreview(content){
       continue;
     }
     if(!t){ i++; continue; }
+    // 富媒体：独占一行的视频链接 / @[provider](url) 语法 → 响应式内嵌（不进入普通段落）
+    const _at = t.match(/^@\[(youtube|bilibili)\]\(([^)\s]+)\)$/i);
+    const _vid = _at ? _at[2] : (/(?:^https?:\/\/\S+$)/i.test(t) || /\.(?:mp4|webm|ogg|mov)$/i.test(t) ? t : null);
+    if(_vid){ const _emb = videoEmbed(_vid); if(_emb){ html += _emb; i++; continue; } }
     // 普通段落（连续非空行，遇块级标记停）
     const buf = [lines[i]];
     i++;
@@ -162,11 +209,22 @@ async function renderReader(){
   $('rdPreview').innerHTML =
     (it.summary ? `<div class="rd-sum">一句话：${esc(it.summary)}</div>` : '') +
     renderRdPreview(content);
+  $('rdPreview').querySelectorAll('a.rd-wikilink').forEach(a => {
+    a.addEventListener('click', ev => {
+      ev.preventDefault();
+      const title = a.dataset.title;
+      const hit = (S.items || []).find(it => it.title === title);
+      if (hit) openReader(hit.id);
+      else toast('库中还没有《'+title+'》——可在「插入互链」里一键建草稿');
+    });
+  });
   $('rdPreview').ondblclick = ()=>setRdMode('edit');
   rewriteRdImages(it.id);        // 正文内相对图片路径 → 后端 asset 接口（受控、防穿越）
   renderRdToc();                 // 右侧浮动大纲（基于本次渲染收集到的标题）
   bindRdCopyBtns();              // 代码块「复制」按钮
   setRdMode('preview');
+  const _createdAt = r.created_at ?? it.created_at;
+  const _updatedAt = r.updated_at ?? it.updated_at ?? _createdAt;
   $('rdChips').innerHTML =
     `<span class="tag">${it.band}</span>`+
     `<span class="tag">位置 ${it.main_pos}</span>`+
@@ -174,7 +232,12 @@ async function renderReader(){
     `<span class="tag">偏差 ${it.offset>0?'+':''}${it.offset}</span>`+
     (r.file_exists
       ? `<span class="tag">本地文件已同步</span>`
-      : `<span class="tag">本地文件待生成</span>`);
+      : `<span class="tag">本地文件待生成</span>`)+
+    `<span class="tag">创建于 ${fmtWhen(_createdAt)}</span>`+
+    `<span class="tag">最近更新 ${fmtWhen(_updatedAt)}</span>`+
+    (r.source_url
+      ? `<a class="tag rd-src" href="${escAttr(r.source_url)}" target="_blank" rel="noopener" title="打开原文链接">原文 ↗</a>`
+      : '');
   $('rdPath').textContent = file
     ? ('本地文件：'+file+(r.file_exists?'':'（本地文件待生成，保存后生成）'))
     : '';
@@ -287,6 +350,26 @@ async function renderReader(){
   renderRdRelated();
   // ---- 插入互链（[[...]] 双链，催生 AI 织入硬链/蓝实线） ----
   $('btnRdLink').onclick = ()=>openRdLinkModal();
+  // 插入图片：选文件 → 上传到全局附件 → 在正文光标处插入 ![alt](/attachments/name)
+  $('btnRdImage').onclick = ()=>$('rdFile').click();
+  $('rdFile').onchange = (e)=>{
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const fr = new FileReader();
+    fr.onload = async ()=>{
+      const b64 = (fr.result || '').split(',')[1];
+      if(!b64) return;
+      try{
+        const r = await api('/api/kb/attachments', {filename: file.name, data: b64});
+        if(r.error){ toast('上传失败：'+r.error); return; }
+        if(rdMode !== 'edit') setRdMode('edit');
+        insertAtCursor($('rdBody'), `\n![${file.name.replace(/\.[^.]+$/, '')}](${r.url})\n`);
+        toast('图片已插入正文（保存后生效）');
+      }catch(err){ toast('上传出错：'+err); }
+    };
+    fr.readAsDataURL(file);
+    e.target.value = '';
+  };
   $('rdLinkClose').onclick = ()=>closeRdLinkModal();
   $('rdLinkModal').onclick = (e)=>{ if(e.target===$('rdLinkModal')) closeRdLinkModal(); };
 }
@@ -329,7 +412,7 @@ function closeRdLinkModal(){ $('rdLinkModal').setAttribute('aria-hidden', 'true'
 function rewriteRdImages(itemId){
   document.querySelectorAll('#rdPreview img').forEach(img=>{
     const src = img.getAttribute('src') || '';
-    if(/^(https?:|data:|\/api\/)/i.test(src)) return;   // 外链 / dataURI / 已改写 跳过
+    if(/^(https?:|data:|\/api\/|\/attachments\/)/i.test(src)) return;   // 外链 / dataURI / 已改写 / 全局附件 跳过
     const rel = src.replace(/^\.\//, '');               // 去掉开头的 ./
     img.setAttribute('src', '/api/kb/asset?id=' + encodeURIComponent(itemId) + '&path=' + encodeURIComponent(rel));
   });
@@ -347,7 +430,13 @@ function renderRdToc(){
     a.onclick = (e)=>{
       e.preventDefault();
       const el = document.getElementById(a.dataset.anchor);
-      if(el){ el.scrollIntoView({behavior:'smooth', block:'start'}); }
+      if(el){
+        // 扣掉吸顶工具条高度 + 呼吸间距，让标题刚好落在顶条下方而非被压住
+        const bar = document.querySelector('.topbar');
+        const offset = (bar ? bar.offsetHeight : 0) + 12;
+        const top = el.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
     };
   });
   bindRdTocScroll();

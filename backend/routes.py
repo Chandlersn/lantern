@@ -190,6 +190,30 @@ def h_kb_asset(q, b, c):
 
 
 
+def h_kb_attachments(q, b, c):
+    """上传附件（图片/视频等）到 _ROOT/attachments/，返回可访问 URL。
+    入参：{filename, data(base64)}。文件名安全清洗，防目录穿越；加时间戳前缀防重名。"""
+    import base64 as _b64, re as _re, time as _t
+    fn = (b.get("filename") or "").strip()
+    data = b.get("data") or ""
+    if not fn or not data:
+        return ({"error": "缺少 filename 或 data"}, 400)
+    fn = os.path.basename(fn)
+    fn = _re.sub(r"[^\w.\-\u4e00-\u9fa5]", "_", fn)   # 去目录与非法字符
+    if not _re.search(r"\.(png|jpe?g|gif|webp|svg|bmp|ico|mp4|webm|ogg|mov|pdf)$", fn, _re.I):
+        return ({"error": "不支持的文件类型"}, 400)
+    fn = f"{int(_t.time()*1000)}_{fn}"
+    d = os.path.join(_ROOT, "attachments")
+    os.makedirs(d, exist_ok=True)
+    try:
+        raw = _b64.b64decode(data, validate=True)
+    except Exception:
+        return ({"error": "data 不是合法 base64"}, 400)
+    with open(os.path.join(d, fn), "wb") as f:
+        f.write(raw)
+    return {"url": "/attachments/" + fn, "filename": fn}
+
+
 def h_kb_backlinks(q, b, c):
     iid = _q(q, "id")
     if not iid:
@@ -298,7 +322,8 @@ def h_kb_add(q, b, c):
         return ({"error": "content 不能为空"}, 400)
     return kb.add_knowledge(title, content,
                             bool(b.get("run_closure", True)),
-                            (b.get("axis_domain") or None))
+                            (b.get("axis_domain") or None),
+                            (b.get("source_url") or None))
 
 
 def h_kb_query(q, b, c):
@@ -392,7 +417,8 @@ def h_kb_update(q, b, c):
                              (b.get("title") or "").strip(),
                              (b.get("content") or "").strip(),
                              (b.get("axis_domain") or None),
-                             b.get("rev"))
+                             b.get("rev"),
+                             (b.get("source_url") or None))
 
 
 def h_kb_reload(q, b, c):
@@ -637,6 +663,7 @@ ROUTES = [
     ("POST", r"^/api/kb/delete$", h_kb_delete),
     ("POST", r"^/api/kb/backup$", h_kb_backup),
     ("POST", r"^/api/kb/create_draft$", h_kb_create_draft),
+    ("POST", r"^/api/kb/attachments$", h_kb_attachments),
 
     # ---- 旧版（store 直接暴露）接口，保留向后兼容 ----
     ("POST", r"^/api/items$", h_items),

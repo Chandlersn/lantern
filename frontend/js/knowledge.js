@@ -38,9 +38,12 @@ function renderKnowledge(){
   const totalPages = Math.max(1, Math.ceil(total / KB_PAGE_SIZE));
   if(kbPage > totalPages) kbPage = totalPages;
   const start = (kbPage - 1) * KB_PAGE_SIZE;
-  // 展示顺序：倒序（最新创建在最前，第一页即最新）；不改动 S.items 本体，避免影响图谱/概览等其他视图
+  // 展示顺序：按「最近更新」倒序（最新改动在最前，第一页即最近变化），无更新时间回落创建时间；
+  // 不改动 S.items 本体，避免影响图谱/概览等其他视图
   const sortedItems = [...S.items].sort(
-    (a,b)=> (b.created_at||0) - (a.created_at||0) || (b.id||0) - (a.id||0)
+    (a,b)=> (b.updated_at||b.created_at||0) - (a.updated_at||a.created_at||0)
+            || (b.created_at||0) - (a.created_at||0)
+            || (b.id||0) - (a.id||0)
   );
   const pageItems = total > KB_PAGE_SIZE ? sortedItems.slice(start, start + KB_PAGE_SIZE) : sortedItems;
   tb.innerHTML = pageItems.map(i=>{
@@ -50,6 +53,7 @@ function renderKnowledge(){
       <td>${i.main_pos}${i.revised?' *':''}</td>
       <td>${i.vernier}</td>
       <td>${i.offset>0?'+':''}${i.offset}</td>
+      <td style="white-space:nowrap;color:var(--stone);">${fmtWhen(i.updated_at ?? i.created_at)}</td>
       <td style="text-align:right;"><button class="soft tiny" data-del="${i.id}" title="删除这条">删除</button></td>
     </tr>`;
   }).join('');

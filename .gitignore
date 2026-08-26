@@ -18,6 +18,9 @@ llm_cache.db
 articles/*.md
 articles/**/*.md
 
+# ---- 全局附件（图片/视频，个人数据，绝不入库）----
+attachments/
+
 # ---- 本地主尺定义（user 本地校准，不入库）----
 main_scale_definition.json
 
@@ -40,6 +43,10 @@ lantern_caliper.db-wal
 _tmp_*.py
 _probe_*.py
 *.db.backup*
+
+# ---- 本地数据库安全副本（排障用，非仓库内容，绝不入库）----
+lantern.db.bak*
+lantern.db.safe*
 
 # ---- 操作系统 / 编辑器杂项 ----
 .DS_Store

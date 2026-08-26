@@ -91,7 +91,7 @@ def normalize_axis_domain(value):
     return v if v in CONTROLLED_DOMAINS else None
 
 
-def add_knowledge(title, content, run_closure=True, axis_domain=None):
+def add_knowledge(title, content, run_closure=True, axis_domain=None, source_url=None):
     """摄入一条知识：自动双尺定位 + 生成候选边（+ 碰撞时自动闭环一次）。
     axis_domain：可选更细的学科方向标签，必须是受控学科域（见 axis_domains()），
     否则被归一化为 None，避免自由文本污染存储。"""
@@ -99,7 +99,7 @@ def add_knowledge(title, content, run_closure=True, axis_domain=None):
         return {"ok": False, "msg": "内容不能为空"}
     axis_domain = normalize_axis_domain(axis_domain)
     title = (title or "").strip() or content[:20]
-    item = store.add_item(title, content, axis_domain)
+    item = store.add_item(title, content, axis_domain, source_url)
     edges = []
     # llm 模式下候选边/闭环交给后台补算（store._refine），避免阻塞保存响应；
     # 启发式模式则是本地同步、极快，直接在此连边。
@@ -673,9 +673,9 @@ def get_article(item_id):
             "outlinks": store.outlinks(item_id), "backlinks": store.backlinks(item_id)}
 
 
-def update_article(item_id, title, content, axis_domain=None, rev=None):
+def update_article(item_id, title, content, axis_domain=None, rev=None, source_url=None):
     axis_domain = normalize_axis_domain(axis_domain)
-    return store.update_item(item_id, title, content, axis_domain, rev=rev)
+    return store.update_item(item_id, title, content, axis_domain, rev=rev, source_url=source_url)
 
 
 def reload_article(item_id):
@@ -918,7 +918,8 @@ TOOLS = [
             "properties": {
                 "title": {"type": "string", "description": "知识标题（可选，缺省取内容前20字）"},
                 "content": {"type": "string", "description": "知识正文（必填）"},
-                "run_closure": {"type": "boolean", "description": "碰撞时是否自动闭环，默认 true"}
+                "run_closure": {"type": "boolean", "description": "碰撞时是否自动闭环，默认 true"},
+                "source_url": {"type": "string", "description": "原文链接（可选，如公众号文章 URL）；写入后阅读页显示「阅读原文」可点击跳转"}
             },
             "required": ["content"]
         },
@@ -1103,7 +1104,8 @@ TOOLS = [
             "properties": {
                 "item_id": {"type": "integer", "description": "条目 id（必填）"},
                 "title": {"type": "string", "description": "新标题（必填）"},
-                "content": {"type": "string", "description": "新正文（必填）"}
+                "content": {"type": "string", "description": "新正文（必填）"},
+                "source_url": {"type": "string", "description": "原文链接（可选）；传入则更新，不传则保留原值"}
             },
             "required": ["item_id", "title", "content"]
         },
@@ -1455,7 +1457,9 @@ def dispatch(name, args):
     args = args or {}
     if name == "kb_add":
         return add_knowledge(args.get("title"), args.get("content"),
-                            bool(args.get("run_closure", True)))
+                            bool(args.get("run_closure", True)),
+                            (args.get("axis_domain") or None),
+                            (args.get("source_url") or None))
     if name == "kb_import":
         return import_kb(args.get("text"), args.get("entries"), args.get("directory"))
     if name == "kb_embed_rebuild":
@@ -1537,7 +1541,10 @@ def dispatch(name, args):
         return get_article(args.get("item_id"))
     if name == "kb_update":
         return update_article(args.get("item_id"),
-                             args.get("title", ""), args.get("content", ""))
+                             args.get("title", ""), args.get("content", ""),
+                             (args.get("axis_domain") or None),
+                             args.get("rev"),
+                             (args.get("source_url") or None))
     if name == "kb_reload":
         return reload_article(args.get("item_id"))
     if name == "kb_backlinks":

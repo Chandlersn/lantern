@@ -89,9 +89,11 @@ def _row_to_item(con, row, threshold, doms=None, global_typical=None):
         "collision": abs(offset) > threshold,
         "direction": "positive" if offset > 0 else ("negative" if offset < 0 else "zero"),
         "axis_domain": row["axis_domain"] if "axis_domain" in row.keys() else "",
+        "source_url": row["source_url"] if "source_url" in row.keys() else "",
         "summary": row["summary"] if "summary" in row.keys() else "",
         "tags": row["tags"] if "tags" in row.keys() else "",
         "created_at": row["created_at"],
+        "updated_at": row["updated_at"] if "updated_at" in row.keys() else None,
     }
 
 def _assign_disp_and_typics(items, threshold, global_typical=None):
@@ -306,7 +308,7 @@ def append_to_item(item_id, text, label="孵化合并"):
         pass
     return {"ok": True, "item_id": item_id}
 
-def update_item(item_id, title, content, axis_domain=None, rev=None):
+def update_item(item_id, title, content, axis_domain=None, rev=None, source_url=None):
     """更新条目内容：同步只做「本地启发式定位 + 落库 + 本地向量/摘要 + 写文件」，
     响应秒回；llm 模式下的真实模型读数与向量/摘要升级交给后台 _refine 线程补算。
 
@@ -333,8 +335,8 @@ def update_item(item_id, title, content, axis_domain=None, rev=None):
     if not row:
         con.close()
         return {"ok": False, "msg": "条目不存在"}
-    con.execute("UPDATE items SET title=?, content=? WHERE id=?",
-                (title, content, item_id))
+    con.execute("UPDATE items SET title=?, content=?, updated_at=? WHERE id=?",
+                (title, content, time.time(), item_id))
     # 同步快路径：本地启发式立即定位（永不依赖网络），与 add_item 一致。
     # llm 模式下启发式只允许「归入已有领域」，自创新名先写「未分类」，交给后台 LLM 归纳。
     _write_readings(con, item_id, content, "heuristic",
@@ -344,11 +346,16 @@ def update_item(item_id, title, content, axis_domain=None, rev=None):
         con.execute("UPDATE items SET axis_domain=? WHERE id=?",
                     (axis_domain, item_id))
         _enforce_band_invariant(con, item_id)   # 编辑保存后横轴立即对齐学科域
+    if source_url is not None:
+        con.execute("UPDATE items SET source_url=? WHERE id=?",
+                    (source_url, item_id))
     th = get_threshold(con)
     r2 = con.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
     item = _row_to_item(con, r2, th)
     if axis_domain:
         item["axis_domain"] = axis_domain
+    if source_url is not None:
+        item["source_url"] = source_url
     log(con, item_id, "system",
         f"条目更新「{title}」：主尺 {item['band']}@{item['main_pos']}，"
         f"游标 {item['vernier']}，偏移 {item['offset']}"
@@ -512,7 +519,7 @@ def _clean_text(text):
         out.pop()
     return "\n".join(out)
 
-def add_item(title, content, axis_domain=None):
+def add_item(title, content, axis_domain=None, source_url=None):
     """入库：同步只做「本地启发式定位 + 落库 + 本地向量/摘要」，响应秒回；
     llm 模式下的真实模型读数与向量/摘要升级交给后台 _refine 线程补算。
 
@@ -521,9 +528,10 @@ def add_item(title, content, axis_domain=None):
     """
     content = _clean_text(content)
     con = connect()
+    now = time.time()
     cur = con.execute(
-        "INSERT INTO items(title,content,created_at,alias) VALUES(?,?,?,?)",
-        (title, content, time.time(), title))
+        "INSERT INTO items(title,content,created_at,alias,updated_at) VALUES(?,?,?,?,?)",
+        (title, content, now, title, now))
     iid = cur.lastrowid
     # 同步快路径：本地启发式立即定位（永不依赖网络）。
     # llm 模式下启发式只归入已有领域，自创新名交给后台 LLM 归纳。
@@ -539,6 +547,8 @@ def add_item(title, content, axis_domain=None):
     # 摘要/向量才是真正异步补算的部分，与 axis_domain 无关）。
     if axis_domain:
         item["axis_domain"] = axis_domain
+    if source_url:
+        item["source_url"] = source_url
     log(con, iid, "system",
         f"新条目入库「{title}」：主尺 {item['band']}@{item['main_pos']}，"
         f"游标 {item['vernier']}，偏移 {item['offset']}"
@@ -561,6 +571,9 @@ def add_item(title, content, axis_domain=None):
                 c2.execute("UPDATE items SET axis_domain=? WHERE id=?",
                            (axis_domain, iid))
                 _enforce_band_invariant(c2, iid)   # 入库后横轴立即对齐学科域
+            if source_url:
+                c2.execute("UPDATE items SET source_url=? WHERE id=?",
+                           (source_url, iid))
             _set_embedding(c2, iid, local_embed(content))
             try:
                 s, tg = local_summarize(content)
