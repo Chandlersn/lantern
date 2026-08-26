@@ -1,5 +1,7 @@
 <p align="center">
+  
   <img src="./docs/images/readme/hero.svg" width="100%" alt="灯笼 · 多维轴知识库：基于游标卡尺双尺度定位的知识引擎。">
+  
 </p>
 
 # 灯笼 · 多维轴知识库
@@ -13,6 +15,7 @@
 - **双尺度定位**：每条知识都被两把互不互见的尺子度量，得到「领域带 + 演绎深度」的坐标，而不是单维度的文件夹归档。
 - **阴阳闭环**：游标读数偏离所在领域带的典型值时触发闭环，自动产出跨学科候选知识边（逻辑同构 / 未形式化），让差异被摊开、而非被抹平。
 - **知识图谱（双来源叙事）**：硬链 = AI 织入（`[[...]]`，确定性关联），软链 = 引擎发现（关键词共现 / 语义相似 / 跨域桥接）。两类来源、置信度与着色在 UX 上明确区分。
+- **语义软链持续回算（防陈旧）**：语义边依赖可信的高维 embedding；向量重建或条目改动后，旧推断可能早不成立。引擎把每条语义链当 Unit 用当前向量重算余弦，自动清理孤儿 / 跨维 / 低分边（`prune_stale_semantic_links`，挂钩 `rebuild_embeddings` 与 `refresh_soft_links`）；`build_graph` 渲染前亦过滤不可渲染的语义边，避免无效连线长期挂在图谱上。
 - **概念衍生层**：后端把知识提炼为概念节点并做双向桥接推荐，作为「推荐其他关联文档」的中间件，不污染图谱节点。
 - **检索增强（RAG 原生）**：离线评分检索 + 最近邻 + 关系聚合（`kb_context`），直接聚合成可粘贴进 Agent 自身 prompt 的上下文文本。
 - **反馈邮箱**：引擎自检发现的问题（分类漂移 / 跨域同构 / 未形式化）经节流后右下角逐条弹窗 + 侧边收件箱呈现，且不污染文章正文。
@@ -30,52 +33,109 @@
 - **灵感碎片**：无坐标的原料舱，随手记、关键词聚类、智能孵化成知识条目。
 
 ### 真实界面截图
+
 <table>
+  
   <tr>
+  
     <td align="center" valign="top">
-      <img src="./docs/shots/overview.png" width="100%" alt="总览视图截图"/><br>
-      <b>① 总览</b><br>
+  
+      <img src="./docs/shots/overview.png" width="100%" alt="总览视图截图"/>  
+
+  
+      <b>① 总览</b>  
+
+  
       <sub>库的健康度、领域分布、双尺独立性检验与灵感碎片统计，一眼概览。</sub>
+  
     </td>
+  
   </tr>
+  
   <tr>
+  
     <td align="center" valign="top">
-      <img src="./docs/shots/knowledge.png" width="100%" alt="知识库视图截图"/><br>
-      <b>② 知识库</b><br>
+  
+      <img src="./docs/shots/knowledge.png" width="100%" alt="知识库视图截图"/>  
+
+  
+      <b>② 知识库</b>  
+
+  
       <sub>按双尺度坐标浏览全部知识，支持检索、过滤与双击阅读。</sub>
+  
     </td>
+  
   </tr>
+  
   <tr>
+  
     <td align="center" valign="top">
-      <img src="./docs/shots/visualize.png" width="100%" alt="逻辑偏差·坐标地图截图"/><br>
-      <b>③ 逻辑偏差 · 坐标地图</b><br>
+  
+      <img src="./docs/shots/visualize.png" width="100%" alt="逻辑偏差·坐标地图截图"/>  
+
+  
+      <b>③ 逻辑偏差 · 坐标地图</b>  
+
+  
       <sub>双尺度坐标地图，红虚线为引擎发现的跨域候选边，灯笼标志性视图。</sub>
-      <br><br>
-      <img src="./docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/><br>
-      <b>③ 偏差地图</b><br>
+  
+        
+  
+
+  
+      <img src="./docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/>  
+
+  
+      <b>③ 偏差地图</b>  
+
+  
       <sub>横轴领域、纵轴形式化读数；点相对「领域基准趋势线」的浮动表达偏离。</sub>
+  
     </td>
+  
   </tr>
+  
   <tr>
+  
     <td align="center" valign="top">
-      <img src="./docs/shots/graph.png" width="100%" alt="知识图谱视图截图"/><br>
-      <b>④ 知识图谱</b><br>
+  
+      <img src="./docs/shots/graph.png" width="100%" alt="知识图谱视图截图"/>  
+
+  
+      <b>④ 知识图谱</b>  
+
+  
       <sub>硬链（AI 织入）与软链（引擎发现）双来源叙事，点选节点展开连线。</sub>
+  
     </td>
+  
   </tr>
+  
   <tr>
+  
     <td align="center" valign="top">
-      <img src="./docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/><br>
-      <b>⑤ 灵感碎片</b><br>
+  
+      <img src="./docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/>  
+
+  
+      <b>⑤ 灵感碎片</b>  
+
+  
       <sub>无坐标的原料舱：随手记、关键词聚类、智能孵化成知识条目；卡片双击编辑、长内容单击展开。</sub>
+  
     </td>
+  
   </tr>
+  
 </table>
 
 ## 核心思想（一图速览）
 
 > 同一段知识被两把互不互见的尺子度量：主尺判定它属于哪个学科领域带，游标判定它的逻辑演绎有多深。
+>   
 > 当「游标读数 − 该领域带的典型游标值」超过阈值，便认为这段知识在形式上「离域典型远」，
+>   
 > 触发阴阳闭环，并建议一条跨学科候选边——把不易注意到的结构差异摊开给人看，不下优劣结论。
 
 坐标语义详见 [`AGENTS.md`](AGENTS.md) 的「坐标语义 / 独立性守卫」章节。
@@ -94,7 +154,7 @@
 │  backend/    后端服务层（服务端 Python，仅标准库）               │
 │   server.py   薄传输层：HTTP 连接 / JSON / 静态托管 / 定时扫描   │
 │   routes.py   REST 路由表（method+path → handler，与传输解耦）   │
-│   kb.py       Agent 工具门面（29 个 kb_* 工具，REST/MCP/CLI 同源）│
+│   kb.py       Agent 工具门面（38 个 kb_* 工具，REST/MCP/CLI 同源）│
 │   kb_cli.py   CLI 直连入口（无需服务在线，直读 lantern.db）      │
 │   mcp_server.py  MCP stdio 入口（server 名 lantern-kb）         │
 │   seed_demo.py   合成演示数据生成器                              │
@@ -118,7 +178,7 @@ lantern-caliper/
 ├── backend/            # 后端服务层（服务端 Python）
 │   ├── server.py       # HTTP 服务：REST 传输层 + 静态前端托管（默认 127.0.0.1:8731）
 │   ├── routes.py       # REST 路由表与 handler（与传输层解耦）
-│   ├── kb.py           # Agent 工具门面（29 个 kb_* 工具，REST/MCP/CLI 同源）
+│   ├── kb.py           # Agent 工具门面（38 个 kb_* 工具，REST/MCP/CLI 同源）
 │   ├── kb_cli.py       # 命令行直连入口（无需服务在线，直接读 lantern.db）
 │   ├── mcp_server.py   # MCP stdio 服务入口（server 名 lantern-kb）
 │   └── seed_demo.py    # 生成合成演示数据（绝不入库真实个人数据）
@@ -158,67 +218,87 @@ python backend/server.py               # 监听 http://127.0.0.1:8731/
 ## REST API 契约
 
 所有接口以 JSON 通信，基址 `http://127.0.0.1:8731`。知识库能力统一为
+  
 `POST /api/kb/<tool>`（请求体 JSON），所有 `kb_*` 工具名与 [`AGENTS.md`](AGENTS.md) 一一对应；
+  
 另有若干只读/辅助端点供前端轮询。路由表集中在 `backend/routes.py`，与传输层解耦。
 
 ### 系统 / 引擎状态（GET）
-| 端点 | 说明 |
-|------|------|
-| `/api/schema` | 「构成逻辑」快照（领域带 / 阈值 / 模式 / 独立性 / 概念层） |
-| `/api/state` | 工作台总览（条目 / 边 / 独立性 / 信号 / 健康度 / provider） |
-| `/api/llm` | 大模型 provider 状态 |
-| `/api/isolation` | 两尺输入互补切分演示（`?text=`） |
-| `/api/edges` | 候选跨学科边列表 |
-| `/api/logs` | 引擎日志 |
-| `/api/independence` | 两尺独立性检验 |
-| `/api/audit-log` | 审计日志与统计 |
-| `/api/audit-log/purge` (POST) | 清理 N 天前的审计日志（`keep_days`） |
+
+| 端点                            | 说明                                        |
+| ----------------------------- | ----------------------------------------- |
+| `/api/schema`                 | 「构成逻辑」快照（领域带 / 阈值 / 模式 / 独立性 / 概念层）       |
+| `/api/state`                  | 工作台总览（条目 / 边 / 独立性 / 信号 / 健康度 / provider） |
+| `/api/llm`                    | 大模型 provider 状态                           |
+| `/api/isolation`              | 两尺输入互补切分演示（`?text=`）                      |
+| `/api/edges`                  | 候选跨学科边列表                                  |
+| `/api/logs`                   | 引擎日志                                      |
+| `/api/independence`           | 两尺独立性检验                                   |
+| `/api/audit-log`              | 审计日志与统计                                   |
+| `/api/audit-log/purge` (POST) | 清理 N 天前的审计日志（`keep_days`）                 |
 
 ### 反馈收件箱
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/feedback` | GET | 未读数与反馈列表（`?status=`） |
-| `/api/feedback/read` | POST | 标记已读（`id`） |
-| `/api/feedback/applied` | POST | 标记已应用（`id`） |
-| `/api/feedback/dismiss` | POST | 忽略（`id`） |
-| `/api/feedback/delete` | POST | 删除（`id`） |
-| `/api/feedback/clear` | POST | 清空全部 |
-| `/api/feedback/not_duplicate` | POST | 标记非重复对（`a`,`b`） |
-| `/api/feedback/apply` | POST | 生成修订稿（`id`，不落库，前端 diff 确认） |
+
+| 端点                            | 方法   | 说明                         |
+| ----------------------------- | ---- | -------------------------- |
+| `/api/feedback`               | GET  | 未读数与反馈列表（`?status=`）       |
+| `/api/feedback/read`          | POST | 标记已读（`id`）                 |
+| `/api/feedback/applied`       | POST | 标记已应用（`id`）                |
+| `/api/feedback/dismiss`       | POST | 忽略（`id`）                   |
+| `/api/feedback/delete`        | POST | 删除（`id`）                   |
+| `/api/feedback/clear`         | POST | 清空全部                       |
+| `/api/feedback/not_duplicate` | POST | 标记非重复对（`a`,`b`）            |
+| `/api/feedback/apply`         | POST | 生成修订稿（`id`，不落库，前端 diff 确认） |
 
 ### 灵感碎片（原料层）
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/sparks` | GET | 列出碎片（`?status=`） |
-| `/api/sparks` | POST | 新增碎片（`content` 必填，`title`/`tags` 可选） |
-| `/api/sparks/clusters` | GET | 关键词共现聚类 |
-| `/api/hatch/stats` | GET | 孵化事件统计 |
-| `/api/sparks/<id>/hatch` | POST | 智能孵化（六阶段管线） |
-| `/api/sparks/<id>/draft` | POST | 生成碰撞创作草稿（不落库） |
-| `/api/sparks/<id>/commit` | POST | 确认草稿入库 |
-| `/api/sparks/<id>/update` | POST | 改内容 / 标题 / 标签 |
-| `/api/sparks/<id>/delete` | POST | 删除碎片 |
+
+| 端点                        | 方法   | 说明                                   |
+| ------------------------- | ---- | ------------------------------------ |
+| `/api/sparks`             | GET  | 列出碎片（`?status=`）                     |
+| `/api/sparks`             | POST | 新增碎片（`content` 必填，`title`/`tags` 可选） |
+| `/api/sparks/clusters`    | GET  | 关键词共现聚类                              |
+| `/api/hatch/stats`        | GET  | 孵化事件统计                               |
+| `/api/sparks/<id>/hatch`  | POST | 智能孵化（六阶段管线）                          |
+| `/api/sparks/<id>/draft`  | POST | 生成碰撞创作草稿（不落库）                        |
+| `/api/sparks/<id>/commit` | POST | 确认草稿入库                               |
+| `/api/sparks/<id>/update` | POST | 改内容 / 标题 / 标签                        |
+| `/api/sparks/<id>/delete` | POST | 删除碎片                                 |
 
 ### 软链（引擎发现）确认 / 刷新
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/soft-link/confirm` | POST | 确认一条软链为硬链（`src_id`,`dst_id`） |
-| `/api/soft-link/dismiss` | POST | 驳回一条软链 |
-| `/api/soft-links/refresh` | POST | 重新跑全库关联发现并接入图谱 |
+
+| 端点                        | 方法   | 说明                           |
+| ------------------------- | ---- | ---------------------------- |
+| `/api/soft-link/confirm`  | POST | 确认一条软链为硬链（`src_id`,`dst_id`） |
+| `/api/soft-link/dismiss`  | POST | 驳回一条软链                       |
+| `/api/soft-links/refresh` | POST | 重新跑全库关联发现并接入图谱               |
+
+### 附件（图片 / 视频）
+
+| 端点                      | 方法   | 说明                                                 |
+| ----------------------- | ---- | -------------------------------------------------- |
+| `/api/kb/attachments`   | POST | 上传附件（图片/视频等）到仓库 `attachments/`，返回可访问 URL（`/attachments/<file>`） |
+| `/attachments/<file>`    | GET  | 经后端安全托管的附件资源（防目录穿越，仅放行白名单类型）                  |
 
 ### 知识库（kb，POST `/api/kb/<tool>`）
+
 `query` · `retrieve` · `fragments` · `neighbors` · `linked_neighbors` · `search` · `position` ·
+  
 `similar` · `suggest_links` · `relate` · `context` · `traverse` · `axes` · `backlinks` ·
+  
 `article`(GET) · `add` · `update` · `reload` · `delete` · `link` · `unlink` ·
+  
 `import` · `import_axes` · `embed_rebuild` · `backup` · `create_draft` · `state` · `schema` ·
+  
 `config`(GET) · `config_set`(POST) · `config_test`(POST) · `calibrate` · `mode`(GET/POST) ·
+  
 `edges`(GET) · `consolidate`(POST) · `concept_neighbors`(GET)
 
 ### 图谱 / 概念
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/graph` | GET | 知识图谱（节点 + 边，硬链/`[[...]]` + 软链） |
-| `/api/concepts` | GET | 派生概念节点列表 |
+
+| 端点              | 方法  | 说明                             |
+| --------------- | --- | ------------------------------ |
+| `/api/graph`    | GET | 知识图谱（节点 + 边，硬链/`[[...]]` + 软链） |
+| `/api/concepts` | GET | 派生概念节点列表                       |
 
 ## 接入自己的知识库
 
@@ -233,20 +313,20 @@ python backend/server.py               # 监听 http://127.0.0.1:8731/
 
 让 Agent 把本知识库当成自带可调用的工具，在任意对话里联合使用：
 
-- **`lantern-kb`**：知识库的薄壳 Skill，封装 `backend/kb.py` 的 29 个工具，经 `backend/kb_cli.py` 直接调用，无需服务在线。详见 [`AGENTS.md`](AGENTS.md)。
+- **`lantern-kb`**（MCP 连接器 · 推荐主路径）：灯笼知识库连接器卡片（`connector-lantern-kb`），底层是 `backend/mcp_server.py`（server 名 `lantern-kb`，已在 `~/.workbuddy/mcp.json` 登记），把 38 个 `kb_*` 工具直接暴露给 Agent。其配套 Skill 已退化为**纯概念指引 / 路由**（双尺度坐标速记、何时用、与 lantern-method 配合），不再声明工具、不教并行 CLI 路径，避免与连接器双路重复。详见 [`AGENTS.md`](AGENTS.md)。
 - **`lantern-method`**：多维轴认知方法 Skill，把对某个概念的理解通过多轴投影、冗余检查、反馈轴拆解成结构化知识条目，并编排写回本知识库。
 
-把这两个 Skill 的地址交给你的 Agent 即可安装使用；安装方式、平台支持与执行边界以 Skill 仓库为准。
+在 WorkBuddy 里：连接器卡片（与 github 同类入口）点 **Trust / 启用** 后，KB 工具即进 Agent 工具箱；普通 Skill 目录 `skills/lantern-kb/` 仅作概念文档，非 agent 调用源。安装方式、平台支持与执行边界以 Skill 仓库为准。
 
 ### 三通道等价调用
 
 任何 Agent 都可通过**三条等价通道**调用同一套能力（共享 `backend/kb.py` 的同一份 `TOOLS` 与 `dispatch`）：
 
-| 通道 | 适用对象 | 接入方式 |
-|------|----------|----------|
-| **REST** | HTTP 型 Agent / 脚本 / 浏览器 | `http://127.0.0.1:8731/api/kb/*`（先 `python backend/server.py`） |
-| **MCP** | 支持 Model Context Protocol 的 Agent（Claude Desktop / Cursor / 框架） | `backend/mcp_server.py`，server 名 `lantern-kb` |
-| **Skill + CLI** | WorkBuddy 等自带工具链的 Agent | 安装 `lantern-kb` Skill，经 `backend/kb_cli.py` 直连 |
+| 通道              | 适用对象                                                            | 接入方式                                                           |
+| --------------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
+| **REST**        | HTTP 型 Agent / 脚本 / 浏览器                                         | `http://127.0.0.1:8731/api/kb/*`（先 `python backend/server.py`） |
+| **MCP**         | 支持 Model Context Protocol 的 Agent（Claude Desktop / Cursor / 框架） | `backend/mcp_server.py`，server 名 `lantern-kb`                  |
+| **Skill + CLI** | WorkBuddy 等自带工具链的 Agent                                         | 安装 `lantern-kb` Skill，经 `backend/kb_cli.py` 直连                 |
 
 ## 示例与隐私
 
@@ -262,14 +342,13 @@ python backend/server.py               # 监听 http://127.0.0.1:8731/
 
 当前版本 **v1.1.0**（应用版本，见 `backend/mcp_server.py` 的 `SERVER_INFO.version`）。数据库 schema 版本独立维护于 `schema.json`，本次未变更。
 
-按时间倒序记录本项目的关键迭代里程碑（基于仓库提交历史，最新在前）：
-
-| 日期 | 版本 | 里程碑 | 说明 |
-|------|------|--------|------|
-| 2026-08-23 | **v1.1.0** | 阅读页与检索打磨、反馈闭环、摘要收口 | 阅读页预览打磨、检索结果按主题分组（非线性索引）、反馈支持在条目内对话式修正并落回、三处落库点统一摘要收口 |
-| 2026-08-12 | — | 清理、分发与目录重构 | 移除不属于本项目的 `theory.html`；前端交互修正；本地嵌入模型 `bge-small-zh-v1.5` 经 Git LFS 入仓；`backend/frontend` 目录重构、孵化闭环改为反哺碎片 |
-| 2026-08-11 | — | 图谱与交互打磨 | 图谱实线修复、冗余清理与交互打磨 |
-| 2026-08-10 | — | 开源首发、灵感碎片与智能孵化 | 模块化三层架构 + 文档 + 配套 Skills（`lantern-kb` / `lantern-method`）打包发布；新增无坐标灵感碎片原料舱与智能孵化全链路；孵化升级为六阶段系统事件 |
+| 日期         | 版本         | 里程碑                | 说明                                                                                                        |
+| ---------- | ---------- | ------------------ | --------------------------------------------------------------------------------------------------------- |
+| 2026-08-23 | **v1.1.0** | 阅读页与检索打磨、反馈闭环、摘要收口 | 阅读页预览打磨、检索结果按主题分组（非线性索引）、反馈支持在条目内对话式修正并落回、三处落库点统一摘要收口                                                     |
+| 2026-08-26 | —          | 语义软链防陈旧 + 附件能力 + 回归测试 | 新增 `prune_stale_semantic_links` 持续回算清理陈旧/跨维/低分语义边，挂钩 `rebuild_embeddings`/`refresh_soft_links`；`build_graph` 渲染前过滤不可渲染语义边；`tests` 新增回归测试防复发；后端支持附件上传与托管；条目新增 `source_url`（阅读页「阅读原文」） |
+| 2026-08-12 | —          | 清理、分发与目录重构         | 移除不属于本项目的 `theory.html`；前端交互修正；本地嵌入模型 `bge-small-zh-v1.5` 经 Git LFS 入仓；`backend/frontend` 目录重构、孵化闭环改为反哺碎片 |
+| 2026-08-11 | —          | 图谱与交互打磨            | 图谱实线修复、冗余清理与交互打磨                                                                                          |
+| 2026-08-10 | —          | 开源首发、灵感碎片与智能孵化     | 模块化三层架构 + 文档 + 配套 Skills（`lantern-kb` / `lantern-method`）打包发布；新增无坐标灵感碎片原料舱与智能孵化全链路；孵化升级为六阶段系统事件           |
 
 ## 许可证
 
