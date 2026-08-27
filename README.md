@@ -1,8 +1,5 @@
-<p align="center">
-  
-  <img src="./docs/images/readme/hero.svg" width="100%" alt="灯笼 · 多维轴知识库：基于游标卡尺双尺度定位的知识引擎。">
-  
-</p>
+![灯笼 · 多维轴知识库：基于游标卡尺双尺度定位的知识引擎。](./docs/images/readme/hero.svg)
+
 
 # 灯笼 · 多维轴知识库
 
@@ -34,101 +31,32 @@
 
 ### 真实界面截图
 
-<table>
-  
-  <tr>
-  
-    <td align="center" valign="top">
-  
-      <img src="./docs/shots/overview.png" width="100%" alt="总览视图截图"/>  
+### 真实界面截图
 
-  
-      <b>① 总览</b>  
+![总览视图截图](./docs/shots/overview.png)
 
-  
-      <sub>库的健康度、领域分布、双尺独立性检验与灵感碎片统计，一眼概览。</sub>
-  
-    </td>
-  
-  </tr>
-  
-  <tr>
-  
-    <td align="center" valign="top">
-  
-      <img src="./docs/shots/knowledge.png" width="100%" alt="知识库视图截图"/>  
+**① 总览** — 库的健康度、领域分布、双尺独立性检验与灵感碎片统计，一眼概览。
 
-  
-      <b>② 知识库</b>  
+![知识库视图截图](./docs/shots/knowledge.png)
 
-  
-      <sub>按双尺度坐标浏览全部知识，支持检索、过滤与双击阅读。</sub>
-  
-    </td>
-  
-  </tr>
-  
-  <tr>
-  
-    <td align="center" valign="top">
-  
-      <img src="./docs/shots/visualize.png" width="100%" alt="逻辑偏差·坐标地图截图"/>  
+**② 知识库** — 按双尺度坐标浏览全部知识，支持检索、过滤与双击阅读。
 
-  
-      <b>③ 逻辑偏差 · 坐标地图</b>  
+![逻辑偏差·坐标地图截图](./docs/shots/visualize.png)
 
-  
-      <sub>双尺度坐标地图，红虚线为引擎发现的跨域候选边，灯笼标志性视图。</sub>
-  
-        
-  
+**③ 逻辑偏差 · 坐标地图** — 双尺度坐标地图，红虚线为引擎发现的跨域候选边，灯笼标志性视图。
 
-  
-      <img src="./docs/shots/visualize-deviation.png" width="100%" alt="逻辑偏差·偏差地图截图"/>  
+![逻辑偏差·偏差地图截图](./docs/shots/visualize-deviation.png)
 
-  
-      <b>③ 偏差地图</b>  
+**③ 偏差地图** — 横轴领域、纵轴形式化读数；点相对「领域基准趋势线」的浮动表达偏离。
 
-  
-      <sub>横轴领域、纵轴形式化读数；点相对「领域基准趋势线」的浮动表达偏离。</sub>
-  
-    </td>
-  
-  </tr>
-  
-  <tr>
-  
-    <td align="center" valign="top">
-  
-      <img src="./docs/shots/graph.png" width="100%" alt="知识图谱视图截图"/>  
+![知识图谱视图截图](./docs/shots/graph.png)
 
-  
-      <b>④ 知识图谱</b>  
+**④ 知识图谱** — 硬链（AI 织入）与软链（引擎发现）双来源叙事，点选节点展开连线。
 
-  
-      <sub>硬链（AI 织入）与软链（引擎发现）双来源叙事，点选节点展开连线。</sub>
-  
-    </td>
-  
-  </tr>
-  
-  <tr>
-  
-    <td align="center" valign="top">
-  
-      <img src="./docs/shots/sparks.png" width="100%" alt="灵感碎片视图截图"/>  
+![灵感碎片视图截图](./docs/shots/sparks.png)
 
-  
-      <b>⑤ 灵感碎片</b>  
+**⑤ 灵感碎片** — 无坐标的原料舱：随手记、关键词聚类、智能孵化成知识条目；卡片双击编辑、长内容单击展开。
 
-  
-      <sub>无坐标的原料舱：随手记、关键词聚类、智能孵化成知识条目；卡片双击编辑、长内容单击展开。</sub>
-  
-    </td>
-  
-  </tr>
-  
-</table>
 
 ## 核心思想（一图速览）
 
