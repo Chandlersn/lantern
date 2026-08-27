@@ -67,3 +67,6 @@ skills/*/scripts/__pycache__/
 
 # ---- 临时测试/副本（_remtest 下为 db 副本等一次性产物，绝不入库）----
 _remtest/
+
+# ---- 生成的 README 离线预览（由 demo/build_readme_preview.py 生成，图片内联，非仓库源码）----
+docs/README-preview.html
